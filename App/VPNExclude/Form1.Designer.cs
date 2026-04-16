@@ -325,10 +325,10 @@
             detailsLayout.Location = new Point(10, 24);
             detailsLayout.Name = "detailsLayout";
             detailsLayout.RowCount = 5;
-            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
             detailsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             detailsLayout.Size = new Size(795, 134);
             detailsLayout.TabIndex = 0;
@@ -431,9 +431,9 @@
             // btnSave
             // 
             btnSave.Anchor = AnchorStyles.Right | AnchorStyles.Top;
-            btnSave.Location = new Point(696, 115);
+            btnSave.Location = new Point(672, 102);
             btnSave.Name = "btnSave";
-            btnSave.Size = new Size(96, 28);
+            btnSave.Size = new Size(120, 30);
             btnSave.TabIndex = 10;
             btnSave.Text = "Сохранить";
             btnSave.UseVisualStyleBackColor = true;
