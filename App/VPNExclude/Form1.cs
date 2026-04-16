@@ -273,10 +273,17 @@ namespace VPNExclude
                     return;
                 }
 
-                ips = resolvedIps;
+                var existingIps = new List<string>();
+                if (_selectedRule != null)
+                {
+                    existingIps.AddRange(_selectedRule.Ips);
+                }
+
+                ips = MergeIpLists(existingIps, resolvedIps);
                 txtIps.Text = string.Join(", ", ips);
                 _pendingCheckedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                AddLog($"Автоподстановка IP для домена {target}: {txtIps.Text}");
+                AddLog($"Автоподстановка IP для домена {target}. DNS вернул: {string.Join(", ", resolvedIps)}");
+                AddLog($"Итоговый список IP для сохранения: {txtIps.Text}");
             }
 
             if (type.Equals("IP", StringComparison.OrdinalIgnoreCase) && ips.Count == 0)
@@ -442,22 +449,35 @@ namespace VPNExclude
                 }
 
                 var ipListAsText = string.Join(", ", uniqueIpv4);
-                txtIps.Text = ipListAsText;
+                var existingIps = MergeIpLists(
+                    ParseIpv4FromText(txtIps.Text),
+                    _selectedRule == null ? new List<string>() : _selectedRule.Ips);
+                var mergedIps = MergeIpLists(existingIps, uniqueIpv4);
+                var addedIps = mergedIps
+                    .Except(existingIps, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                txtIps.Text = string.Join(", ", mergedIps);
                 _pendingCheckedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 if (_selectedRule != null)
                 {
-                    _selectedRule.Ips = uniqueIpv4;
+                    _selectedRule.Ips = mergedIps;
                     _selectedRule.CheckedAt = _pendingCheckedAt;
                     RefreshGridAndSelection();
                 }
 
-                var statusWithIps = uniqueIpv4.Count == 1
-                    ? $"Проверка домена: {uniqueIpv4[0]}"
-                    : $"Проверка домена: {uniqueIpv4[0]} (+{uniqueIpv4.Count - 1})";
+                var statusWithIps = addedIps.Count == 0
+                    ? "Проверка домена: новых IP не найдено"
+                    : $"Проверка домена: добавлено {addedIps.Count} IP";
 
                 SetStatus(statusWithIps);
-                AddLog($"Проверка домена {target}: {ipListAsText}");
+                AddLog($"Проверка домена {target}. Текущие IP: {FormatIpList(existingIps)}");
+                AddLog($"DNS вернул: {ipListAsText}");
+                AddLog(addedIps.Count == 0
+                    ? "Новых IP не найдено. Список не изменился."
+                    : $"Добавлены новые IP: {string.Join(", ", addedIps)}");
+                AddLog($"Итоговый список IP: {txtIps.Text}");
             }
             catch (Exception ex)
             {
@@ -596,6 +616,17 @@ namespace VPNExclude
             return IPAddress.TryParse(value, out var address) && address.AddressFamily == AddressFamily.InterNetwork;
         }
 
+        private static List<string> ParseIpv4FromText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return new List<string>();
+            }
+
+            var source = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return NormalizeIpv4List(source);
+        }
+
         private static List<string> NormalizeIpv4List(IEnumerable<string> values)
         {
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -613,6 +644,28 @@ namespace VPNExclude
             }
 
             return result.ToList();
+        }
+
+        private static List<string> MergeIpLists(IEnumerable<string> primary, IEnumerable<string> secondary)
+        {
+            var merged = NormalizeIpv4List(primary);
+            var secondaryNormalized = NormalizeIpv4List(secondary);
+
+            foreach (var ip in secondaryNormalized)
+            {
+                if (!merged.Contains(ip, StringComparer.OrdinalIgnoreCase))
+                {
+                    merged.Add(ip);
+                }
+            }
+
+            return merged;
+        }
+
+        private static string FormatIpList(IEnumerable<string> ips)
+        {
+            var normalized = NormalizeIpv4List(ips);
+            return normalized.Count == 0 ? "(пусто)" : string.Join(", ", normalized);
         }
 
         private bool RouteExists(string ip, string gateway)
