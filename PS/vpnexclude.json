@@ -76,5 +76,53 @@
         "CreatedAt":  "2026-04-16 15:02:53",
         "UpdatedAt":  null,
         "LastCheckedAt":  "2026-04-16 15:02:53"
+    },
+    {
+        "Target":  "cp.beget.com",
+        "Type":  "Domain",
+        "Ips":  [
+                    "193.168.47.247"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 15:54:09",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 15:54:09"
+    },
+    {
+        "Target":  "beget.com",
+        "Type":  "Domain",
+        "Ips":  [
+                    "193.168.47.254"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 15:54:37",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 15:54:37"
+    },
+    {
+        "Target":  "swarm.beget.com",
+        "Type":  "Domain",
+        "Ips":  [
+                    "185.225.33.178"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 15:55:24",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 15:55:24"
+    },
+    {
+        "Target":  "sprutio.beget.com",
+        "Type":  "Domain",
+        "Ips":  [
+                    "5.101.158.82"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 15:56:30",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 15:58:21"
     }
 ]
