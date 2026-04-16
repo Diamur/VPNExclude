@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Diagnostics;
+using System.Security.Principal;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace VPNExclude
 {
@@ -500,11 +503,153 @@ namespace VPNExclude
 
         private void BtnApplyRoutes_Click(object? sender, EventArgs e)
         {
-            const string message = "Системное применение маршрутов будет реализовано на следующем этапе.";
-            MessageBox.Show(message, "Пока недоступно", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            SetStatus("Применение маршрутов пока недоступно");
-            AddLog(message);
+            if (_selectedRule == null)
+            {
+                MessageBox.Show("Сначала выберите запись в таблице.", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetStatus("Применение маршрутов отменено: запись не выбрана");
+                AddLog("Применение маршрутов отменено: запись не выбрана.");
+                return;
+            }
+
+            if (!IsValidIpv4(_selectedRule.Gateway))
+            {
+                MessageBox.Show("Укажите корректный IPv4 шлюз в поле Gateway.", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Применение маршрутов отменено: невалидный шлюз");
+                AddLog($"Применение маршрутов отменено: невалидный шлюз '{_selectedRule.Gateway}'.");
+                return;
+            }
+
+            var gateway = _selectedRule.Gateway.Trim();
+            var normalizedIps = NormalizeIpv4List(_selectedRule.Ips);
+            if (normalizedIps.Count == 0)
+            {
+                MessageBox.Show("В выбранной записи нет валидных IPv4 для применения маршрутов.", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Применение маршрутов отменено: IP отсутствуют");
+                AddLog($"Применение маршрутов отменено для {_selectedRule.Target}: валидные IP не найдены.");
+                return;
+            }
+
+            if (!IsRunningAsAdministrator())
+            {
+                const string message = "Для применения маршрутов нужно запустить приложение от имени администратора.";
+                MessageBox.Show(message, "Недостаточно прав", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Применение маршрутов отменено: нет прав администратора");
+                AddLog(message);
+                return;
+            }
+
+            AddLog($"Применение маршрутов для {_selectedRule.Target} через шлюз {gateway}");
+
+            var added = 0;
+            var existed = 0;
+            var failed = 0;
+
+            foreach (var ip in normalizedIps)
+            {
+                try
+                {
+                    if (RouteExists(ip, gateway))
+                    {
+                        existed++;
+                        AddLog($"Маршрут уже существует: {ip} -> {gateway}");
+                        continue;
+                    }
+
+                    var addResult = RunProcess("route.exe", $"-p add {ip} mask 255.255.255.255 {gateway}");
+                    if (addResult.ExitCode == 0)
+                    {
+                        added++;
+                        AddLog($"Маршрут добавлен: {ip} -> {gateway}");
+                        continue;
+                    }
+
+                    failed++;
+                    var errorText = string.IsNullOrWhiteSpace(addResult.StdErr)
+                        ? addResult.StdOut
+                        : addResult.StdErr;
+                    AddLog($"Ошибка добавления маршрута: {ip} -> {errorText.Trim()}");
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    AddLog($"Ошибка добавления маршрута: {ip} -> {ex.Message}");
+                }
+            }
+
+            SetStatus($"Маршруты применены: добавлено {added}, уже было {existed}, ошибок {failed}");
         }
+
+        private static bool IsRunningAsAdministrator()
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return false;
+            }
+
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        private static bool IsValidIpv4(string value)
+        {
+            return IPAddress.TryParse(value, out var address) && address.AddressFamily == AddressFamily.InterNetwork;
+        }
+
+        private static List<string> NormalizeIpv4List(IEnumerable<string> values)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var value in values)
+            {
+                var candidates = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var candidate in candidates)
+                {
+                    if (IPAddress.TryParse(candidate, out var address) && address.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        result.Add(address.ToString());
+                    }
+                }
+            }
+
+            return result.ToList();
+        }
+
+        private bool RouteExists(string ip, string gateway)
+        {
+            var printResult = RunProcess("route.exe", $"print {ip}");
+            if (printResult.ExitCode != 0)
+            {
+                return false;
+            }
+
+            var normalizedOutput = printResult.StdOut.Replace("\r", string.Empty);
+            var pattern = $@"^\s*{Regex.Escape(ip)}\s+255\.255\.255\.255\s+{Regex.Escape(gateway)}\s+";
+            return Regex.IsMatch(normalizedOutput, pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+
+        private static ProcessResult RunProcess(string fileName, string arguments)
+        {
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            process.Start();
+            var stdOut = process.StandardOutput.ReadToEnd();
+            var stdErr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            return new ProcessResult(process.ExitCode, stdOut, stdErr);
+        }
+
+        private readonly record struct ProcessResult(int ExitCode, string StdOut, string StdErr);
 
         private void SetStatus(string message)
         {
