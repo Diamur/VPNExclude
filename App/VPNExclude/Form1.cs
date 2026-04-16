@@ -13,10 +13,21 @@ namespace VPNExclude
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
         private readonly List<ExclusionRule> _rules = new();
+        private readonly List<SystemRouteInfo> _systemRoutes = new();
         private readonly string _jsonPath;
         private ExclusionRule? _selectedRule;
         private string? _pendingCheckedAt;
         private bool _isInternalSelectionChange;
+
+        private sealed class SystemRouteInfo
+        {
+            public string Ip { get; set; } = string.Empty;
+            public string Gateway { get; set; } = string.Empty;
+            public string Interface { get; set; } = string.Empty;
+            public string Metric { get; set; } = string.Empty;
+            public bool Active { get; set; }
+            public bool Persistent { get; set; }
+        }
 
         public Form1()
         {
@@ -32,6 +43,9 @@ namespace VPNExclude
             btnRefresh.Click += BtnRefresh_Click;
             btnCheckDomain.Click += BtnCheckDomain_Click;
             btnApplyRoutes.Click += BtnApplyRoutes_Click;
+            btnLoadSystemRoutes.Click += BtnLoadSystemRoutes_Click;
+            btnCompareRoutes.Click += BtnCompareRoutes_Click;
+            btnRefreshSystemRoutes.Click += BtnLoadSystemRoutes_Click;
 
             Load += Form1_Load;
         }
@@ -115,7 +129,8 @@ namespace VPNExclude
                     rule.Comment,
                     rule.CreatedAt,
                     rule.UpdatedAt,
-                    rule.CheckedAt);
+                    rule.CheckedAt,
+                    IsRuleFullyInSystem(rule));
 
                 dgvRules.Rows[rowIndex].Tag = rule;
             }
@@ -519,6 +534,277 @@ namespace VPNExclude
                 errorMessage = $"Ошибка DNS: {ex.Message}";
                 return false;
             }
+        }
+
+        private void BtnLoadSystemRoutes_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                _systemRoutes.Clear();
+                _systemRoutes.AddRange(LoadSystemHostRoutes());
+                PopulateSystemRoutesGrid(includeComparison: false);
+                RefreshGridAndSelection();
+                LogRulesInSystemSummary();
+
+                SetStatus($"Загружено {_systemRoutes.Count} системных host-маршрутов");
+                AddLog($"Загружено {_systemRoutes.Count} системных host-маршрутов.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки системных маршрутов:\n{ex.Message}", "Системные маршруты", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Ошибка загрузки системных маршрутов");
+                AddLog($"Ошибка загрузки системных маршрутов: {ex.Message}");
+            }
+        }
+
+        private void BtnCompareRoutes_Click(object? sender, EventArgs e)
+        {
+            if (_systemRoutes.Count == 0)
+            {
+                _systemRoutes.AddRange(LoadSystemHostRoutes());
+            }
+
+            PopulateSystemRoutesGrid(includeComparison: true);
+            RefreshGridAndSelection();
+            LogRulesInSystemSummary();
+
+            var routesInJson = _systemRoutes.Count(route => FindJsonTargetsByIp(route.Ip).Count > 0);
+            var routesOnlyInSystem = _systemRoutes.Count - routesInJson;
+            var jsonOnlyIps = GetJsonIpMap().Keys.Count(ip => !_systemRoutes.Any(route => string.Equals(route.Ip, ip, StringComparison.OrdinalIgnoreCase)));
+
+            SetStatus($"Сравнение завершено: совпало {routesInJson}, только в системе {routesOnlyInSystem}, только в JSON {jsonOnlyIps}");
+            AddLog($"Найдено {routesInJson} маршрутов, совпадающих с JSON.");
+            AddLog($"В системе есть {routesOnlyInSystem} маршрутов, которых нет в JSON.");
+            AddLog($"В JSON есть {jsonOnlyIps} IP, которых нет в системе.");
+        }
+
+        private List<SystemRouteInfo> LoadSystemHostRoutes()
+        {
+            var result = RunProcess("route.exe", "print -4");
+            if (result.ExitCode != 0)
+            {
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.StdErr) ? result.StdOut : result.StdErr);
+            }
+
+            var routes = new Dictionary<string, SystemRouteInfo>(StringComparer.OrdinalIgnoreCase);
+            var lines = result.StdOut.Replace("\r", string.Empty).Split('\n');
+
+            var inActive = false;
+            var inPersistent = false;
+
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.Trim();
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("Active Routes:", StringComparison.OrdinalIgnoreCase))
+                {
+                    inActive = true;
+                    inPersistent = false;
+                    continue;
+                }
+
+                if (line.StartsWith("Persistent Routes:", StringComparison.OrdinalIgnoreCase))
+                {
+                    inActive = false;
+                    inPersistent = true;
+                    continue;
+                }
+
+                if (line.StartsWith("====") || line.StartsWith("Network Destination", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var parts = Regex.Split(line, @"\s+");
+                if (inActive && parts.Length >= 5)
+                {
+                    var destination = parts[0];
+                    var mask = parts[1];
+                    var gateway = parts[2];
+                    var iface = parts[3];
+                    var metric = parts[4];
+
+                    if (!IsHostRouteCandidate(destination, mask, gateway))
+                    {
+                        continue;
+                    }
+
+                    var key = $"{destination}|{gateway}";
+                    if (!routes.TryGetValue(key, out var route))
+                    {
+                        route = new SystemRouteInfo { Ip = destination, Gateway = gateway, Interface = iface, Metric = metric };
+                        routes[key] = route;
+                    }
+
+                    route.Active = true;
+                    if (string.IsNullOrWhiteSpace(route.Interface))
+                    {
+                        route.Interface = iface;
+                    }
+                    if (string.IsNullOrWhiteSpace(route.Metric))
+                    {
+                        route.Metric = metric;
+                    }
+
+                    continue;
+                }
+
+                if (inPersistent && parts.Length >= 4)
+                {
+                    var destination = parts[0];
+                    var mask = parts[1];
+                    var gateway = parts[2];
+                    var metric = parts[3];
+
+                    if (!IsHostRouteCandidate(destination, mask, gateway))
+                    {
+                        continue;
+                    }
+
+                    var key = $"{destination}|{gateway}";
+                    if (!routes.TryGetValue(key, out var route))
+                    {
+                        route = new SystemRouteInfo { Ip = destination, Gateway = gateway, Metric = metric };
+                        routes[key] = route;
+                    }
+
+                    route.Persistent = true;
+                    if (string.IsNullOrWhiteSpace(route.Metric))
+                    {
+                        route.Metric = metric;
+                    }
+                }
+            }
+
+            return routes.Values.OrderBy(route => route.Ip, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static bool IsHostRouteCandidate(string destination, string mask, string gateway)
+        {
+            if (!string.Equals(mask, "255.255.255.255", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (!IsValidIpv4(destination) || !IsValidIpv4(gateway))
+            {
+                return false;
+            }
+
+            if (destination.StartsWith("127.", StringComparison.Ordinal) || gateway.StartsWith("127.", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (string.Equals(gateway, "0.0.0.0", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private void PopulateSystemRoutesGrid(bool includeComparison)
+        {
+            dgvSystemRoutes.Rows.Clear();
+            var jsonIpMap = includeComparison ? GetJsonIpMap() : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var systemIpSet = new HashSet<string>(_systemRoutes.Select(route => route.Ip), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var route in _systemRoutes)
+            {
+                var targets = includeComparison && jsonIpMap.TryGetValue(route.Ip, out var mappedTargets)
+                    ? mappedTargets
+                    : new List<string>();
+
+                var inJson = targets.Count > 0;
+                var status = includeComparison
+                    ? (inJson ? "Совпадает" : "Только в системе")
+                    : route.Active && route.Persistent ? "Активный + постоянный" : route.Active ? "Активный" : "Постоянный";
+
+                dgvSystemRoutes.Rows.Add(
+                    route.Ip,
+                    route.Gateway,
+                    route.Interface,
+                    route.Metric,
+                    route.Active,
+                    route.Persistent,
+                    inJson,
+                    string.Join(", ", targets),
+                    status);
+            }
+
+            if (includeComparison)
+            {
+                foreach (var jsonIp in jsonIpMap.Keys.Where(ip => !systemIpSet.Contains(ip)))
+                {
+                    var targets = jsonIpMap[jsonIp];
+                    dgvSystemRoutes.Rows.Add(
+                        jsonIp,
+                        string.Empty,
+                        string.Empty,
+                        string.Empty,
+                        false,
+                        false,
+                        true,
+                        string.Join(", ", targets),
+                        "Только в JSON");
+                }
+            }
+        }
+
+        private Dictionary<string, List<string>> GetJsonIpMap()
+        {
+            var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var rule in _rules)
+            {
+                var ips = NormalizeIpv4List(rule.Ips);
+                foreach (var ip in ips)
+                {
+                    if (!map.TryGetValue(ip, out var targets))
+                    {
+                        targets = new List<string>();
+                        map[ip] = targets;
+                    }
+
+                    if (!targets.Contains(rule.Target, StringComparer.OrdinalIgnoreCase))
+                    {
+                        targets.Add(rule.Target);
+                    }
+                }
+            }
+
+            return map;
+        }
+
+        private List<string> FindJsonTargetsByIp(string ip)
+        {
+            var map = GetJsonIpMap();
+            return map.TryGetValue(ip, out var targets) ? targets : new List<string>();
+        }
+
+        private bool IsRuleFullyInSystem(ExclusionRule rule)
+        {
+            var ruleIps = NormalizeIpv4List(rule.Ips);
+            if (ruleIps.Count == 0)
+            {
+                return false;
+            }
+
+            var systemIpSet = new HashSet<string>(_systemRoutes.Select(route => route.Ip), StringComparer.OrdinalIgnoreCase);
+            return ruleIps.All(ip => systemIpSet.Contains(ip));
+        }
+
+        private void LogRulesInSystemSummary()
+        {
+            var confirmed = _rules.Count(IsRuleFullyInSystem);
+            var missing = _rules.Count - confirmed;
+            AddLog($"Для {confirmed} записей подтверждено наличие маршрутов в системе.");
+            AddLog($"Для {missing} записей маршруты в системе отсутствуют полностью или частично.");
         }
 
         private void BtnApplyRoutes_Click(object? sender, EventArgs e)

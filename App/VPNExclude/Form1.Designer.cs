@@ -39,6 +39,8 @@
             btnRefresh = new Button();
             btnApplyRoutes = new Button();
             mainPanel = new Panel();
+            tabControlMain = new TabControl();
+            tabRecords = new TabPage();
             dgvRules = new DataGridView();
             colType = new DataGridViewTextBoxColumn();
             colTarget = new DataGridViewTextBoxColumn();
@@ -48,6 +50,7 @@
             colCreatedAt = new DataGridViewTextBoxColumn();
             colUpdatedAt = new DataGridViewTextBoxColumn();
             colCheckedAt = new DataGridViewTextBoxColumn();
+            colInSystem = new DataGridViewCheckBoxColumn();
             detailsPanel = new Panel();
             bottomLayout = new TableLayoutPanel();
             grpDetails = new GroupBox();
@@ -65,17 +68,39 @@
             btnSave = new Button();
             grpLog = new GroupBox();
             rtbLog = new RichTextBox();
+            tabSystemRoutes = new TabPage();
+            dgvSystemRoutes = new DataGridView();
+            colSystemIp = new DataGridViewTextBoxColumn();
+            colSystemGateway = new DataGridViewTextBoxColumn();
+            colSystemInterface = new DataGridViewTextBoxColumn();
+            colSystemMetric = new DataGridViewTextBoxColumn();
+            colSystemActive = new DataGridViewCheckBoxColumn();
+            colSystemPersistent = new DataGridViewCheckBoxColumn();
+            colSystemInJson = new DataGridViewCheckBoxColumn();
+            colSystemTarget = new DataGridViewTextBoxColumn();
+            colSystemStatus = new DataGridViewTextBoxColumn();
+            panelSystemActions = new Panel();
+            flowSystemActions = new FlowLayoutPanel();
+            btnLoadSystemRoutes = new Button();
+            btnCompareRoutes = new Button();
+            btnRefreshSystemRoutes = new Button();
             statusStrip = new StatusStrip();
             lblStatus = new ToolStripStatusLabel();
             topPanel.SuspendLayout();
             topButtonsLayout.SuspendLayout();
             mainPanel.SuspendLayout();
+            tabControlMain.SuspendLayout();
+            tabRecords.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvRules).BeginInit();
             detailsPanel.SuspendLayout();
             bottomLayout.SuspendLayout();
             grpDetails.SuspendLayout();
             detailsLayout.SuspendLayout();
             grpLog.SuspendLayout();
+            tabSystemRoutes.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvSystemRoutes).BeginInit();
+            panelSystemActions.SuspendLayout();
+            flowSystemActions.SuspendLayout();
             statusStrip.SuspendLayout();
             SuspendLayout();
             // 
@@ -174,8 +199,7 @@
             // 
             // mainPanel
             // 
-            mainPanel.Controls.Add(dgvRules);
-            mainPanel.Controls.Add(detailsPanel);
+            mainPanel.Controls.Add(tabControlMain);
             mainPanel.BackColor = SystemColors.Control;
             mainPanel.Dock = DockStyle.Fill;
             mainPanel.Location = new Point(0, 48);
@@ -183,6 +207,29 @@
             mainPanel.Padding = new Padding(12, 0, 12, 12);
             mainPanel.Size = new Size(1200, 658);
             mainPanel.TabIndex = 1;
+            // 
+            // tabControlMain
+            // 
+            tabControlMain.Controls.Add(tabRecords);
+            tabControlMain.Controls.Add(tabSystemRoutes);
+            tabControlMain.Dock = DockStyle.Fill;
+            tabControlMain.Location = new Point(12, 0);
+            tabControlMain.Name = "tabControlMain";
+            tabControlMain.SelectedIndex = 0;
+            tabControlMain.Size = new Size(1176, 646);
+            tabControlMain.TabIndex = 0;
+            // 
+            // tabRecords
+            // 
+            tabRecords.Controls.Add(dgvRules);
+            tabRecords.Controls.Add(detailsPanel);
+            tabRecords.Location = new Point(4, 24);
+            tabRecords.Name = "tabRecords";
+            tabRecords.Padding = new Padding(0);
+            tabRecords.Size = new Size(1168, 618);
+            tabRecords.TabIndex = 0;
+            tabRecords.Text = "Записи";
+            tabRecords.UseVisualStyleBackColor = true;
             // 
             // dgvRules
             // 
@@ -200,21 +247,21 @@
             dgvRules.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
             dgvRules.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvRules.ColumnHeadersHeight = 30;
-            dgvRules.Columns.AddRange(new DataGridViewColumn[] { colType, colTarget, colIps, colGateway, colComment, colCreatedAt, colUpdatedAt, colCheckedAt });
+            dgvRules.Columns.AddRange(new DataGridViewColumn[] { colType, colTarget, colIps, colGateway, colComment, colCreatedAt, colUpdatedAt, colCheckedAt, colInSystem });
             dgvRules.Dock = DockStyle.Fill;
             dgvRules.EnableHeadersVisualStyles = false;
             dataGridViewCellStyle2.BackColor = Color.White;
             dataGridViewCellStyle2.SelectionBackColor = Color.FromArgb(227, 239, 255);
             dataGridViewCellStyle2.SelectionForeColor = SystemColors.ControlText;
             dgvRules.DefaultCellStyle = dataGridViewCellStyle2;
-            dgvRules.Location = new Point(12, 0);
+            dgvRules.Location = new Point(0, 0);
             dgvRules.MultiSelect = false;
             dgvRules.Name = "dgvRules";
             dgvRules.ReadOnly = true;
             dgvRules.RowHeadersVisible = false;
             dgvRules.RowTemplate.Height = 26;
             dgvRules.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvRules.Size = new Size(1176, 466);
+            dgvRules.Size = new Size(1168, 438);
             dgvRules.TabIndex = 0;
             // 
             // colType
@@ -265,14 +312,20 @@
             colCheckedAt.Name = "colCheckedAt";
             colCheckedAt.ReadOnly = true;
             // 
+            // colInSystem
+            // 
+            colInSystem.HeaderText = "В системе";
+            colInSystem.Name = "colInSystem";
+            colInSystem.ReadOnly = true;
+            // 
             // detailsPanel
             // 
             detailsPanel.Controls.Add(bottomLayout);
             detailsPanel.Dock = DockStyle.Bottom;
-            detailsPanel.Location = new Point(12, 466);
+            detailsPanel.Location = new Point(0, 438);
             detailsPanel.Name = "detailsPanel";
             detailsPanel.Padding = new Padding(0, 12, 0, 0);
-            detailsPanel.Size = new Size(1176, 180);
+            detailsPanel.Size = new Size(1168, 180);
             detailsPanel.TabIndex = 1;
             // 
             // bottomLayout
@@ -287,7 +340,7 @@
             bottomLayout.Name = "bottomLayout";
             bottomLayout.RowCount = 1;
             bottomLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            bottomLayout.Size = new Size(1176, 168);
+            bottomLayout.Size = new Size(1168, 168);
             bottomLayout.TabIndex = 0;
             // 
             // grpDetails
@@ -298,7 +351,7 @@
             grpDetails.Margin = new Padding(0, 0, 8, 0);
             grpDetails.Name = "grpDetails";
             grpDetails.Padding = new Padding(10, 8, 10, 10);
-            grpDetails.Size = new Size(815, 168);
+            grpDetails.Size = new Size(809, 168);
             grpDetails.TabIndex = 0;
             grpDetails.TabStop = false;
             grpDetails.Text = "Детали записи";
@@ -330,7 +383,7 @@
             detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
             detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
             detailsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            detailsLayout.Size = new Size(795, 134);
+            detailsLayout.Size = new Size(789, 134);
             detailsLayout.TabIndex = 0;
             // 
             // lblTarget
@@ -348,14 +401,14 @@
             txtTarget.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             txtTarget.Location = new Point(95, 3);
             txtTarget.Name = "txtTarget";
-            txtTarget.Size = new Size(300, 23);
+            txtTarget.Size = new Size(297, 23);
             txtTarget.TabIndex = 1;
             // 
             // lblType
             // 
             lblType.Anchor = AnchorStyles.Left;
             lblType.AutoSize = true;
-            lblType.Location = new Point(401, 6);
+            lblType.Location = new Point(398, 6);
             lblType.Name = "lblType";
             lblType.Size = new Size(26, 15);
             lblType.TabIndex = 2;
@@ -367,16 +420,16 @@
             cmbType.DropDownStyle = ComboBoxStyle.DropDownList;
             cmbType.FormattingEnabled = true;
             cmbType.Items.AddRange(new object[] { "IP", "Domain" });
-            cmbType.Location = new Point(493, 3);
+            cmbType.Location = new Point(490, 3);
             cmbType.Name = "cmbType";
-            cmbType.Size = new Size(299, 23);
+            cmbType.Size = new Size(296, 23);
             cmbType.TabIndex = 3;
             // 
             // lblIps
             // 
             lblIps.Anchor = AnchorStyles.Left;
             lblIps.AutoSize = true;
-            lblIps.Location = new Point(3, 34);
+            lblIps.Location = new Point(3, 30);
             lblIps.Name = "lblIps";
             lblIps.Size = new Size(18, 15);
             lblIps.TabIndex = 4;
@@ -386,16 +439,16 @@
             // 
             detailsLayout.SetColumnSpan(txtIps, 3);
             txtIps.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtIps.Location = new Point(95, 31);
+            txtIps.Location = new Point(95, 27);
             txtIps.Name = "txtIps";
-            txtIps.Size = new Size(697, 23);
+            txtIps.Size = new Size(691, 23);
             txtIps.TabIndex = 5;
             // 
             // lblGateway
             // 
             lblGateway.Anchor = AnchorStyles.Left;
             lblGateway.AutoSize = true;
-            lblGateway.Location = new Point(401, 62);
+            lblGateway.Location = new Point(398, 54);
             lblGateway.Name = "lblGateway";
             lblGateway.Size = new Size(42, 15);
             lblGateway.TabIndex = 6;
@@ -404,16 +457,16 @@
             // txtGateway
             // 
             txtGateway.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtGateway.Location = new Point(493, 59);
+            txtGateway.Location = new Point(490, 51);
             txtGateway.Name = "txtGateway";
-            txtGateway.Size = new Size(299, 23);
+            txtGateway.Size = new Size(296, 23);
             txtGateway.TabIndex = 7;
             // 
             // lblComment
             // 
             lblComment.Anchor = AnchorStyles.Left;
             lblComment.AutoSize = true;
-            lblComment.Location = new Point(3, 90);
+            lblComment.Location = new Point(3, 78);
             lblComment.Name = "lblComment";
             lblComment.Size = new Size(77, 15);
             lblComment.TabIndex = 8;
@@ -423,15 +476,15 @@
             // 
             detailsLayout.SetColumnSpan(txtComment, 3);
             txtComment.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtComment.Location = new Point(95, 87);
+            txtComment.Location = new Point(95, 75);
             txtComment.Name = "txtComment";
-            txtComment.Size = new Size(697, 23);
+            txtComment.Size = new Size(691, 23);
             txtComment.TabIndex = 9;
             // 
             // btnSave
             // 
             btnSave.Anchor = AnchorStyles.Right | AnchorStyles.Top;
-            btnSave.Location = new Point(672, 102);
+            btnSave.Location = new Point(666, 99);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(120, 30);
             btnSave.TabIndex = 10;
@@ -442,26 +495,161 @@
             // 
             grpLog.Controls.Add(rtbLog);
             grpLog.Dock = DockStyle.Fill;
-            grpLog.Location = new Point(823, 0);
+            grpLog.Location = new Point(817, 0);
             grpLog.Margin = new Padding(0);
             grpLog.Name = "grpLog";
             grpLog.Padding = new Padding(10, 8, 10, 10);
-            grpLog.Size = new Size(353, 168);
+            grpLog.Size = new Size(351, 168);
             grpLog.TabIndex = 1;
             grpLog.TabStop = false;
             grpLog.Text = "Лог";
             // 
             // rtbLog
             // 
-            rtbLog.Dock = DockStyle.Fill;
             rtbLog.BackColor = SystemColors.Window;
             rtbLog.BorderStyle = BorderStyle.FixedSingle;
+            rtbLog.Dock = DockStyle.Fill;
             rtbLog.Location = new Point(10, 24);
             rtbLog.Name = "rtbLog";
             rtbLog.ReadOnly = true;
-            rtbLog.Size = new Size(333, 134);
+            rtbLog.Size = new Size(331, 134);
             rtbLog.TabIndex = 0;
             rtbLog.Text = "";
+            // 
+            // tabSystemRoutes
+            // 
+            tabSystemRoutes.Controls.Add(dgvSystemRoutes);
+            tabSystemRoutes.Controls.Add(panelSystemActions);
+            tabSystemRoutes.Location = new Point(4, 24);
+            tabSystemRoutes.Name = "tabSystemRoutes";
+            tabSystemRoutes.Padding = new Padding(0);
+            tabSystemRoutes.Size = new Size(1168, 618);
+            tabSystemRoutes.TabIndex = 1;
+            tabSystemRoutes.Text = "Системные маршруты";
+            tabSystemRoutes.UseVisualStyleBackColor = true;
+            // 
+            // dgvSystemRoutes
+            // 
+            dgvSystemRoutes.AllowUserToAddRows = false;
+            dgvSystemRoutes.AllowUserToDeleteRows = false;
+            dgvSystemRoutes.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvSystemRoutes.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvSystemRoutes.Columns.AddRange(new DataGridViewColumn[] { colSystemIp, colSystemGateway, colSystemInterface, colSystemMetric, colSystemActive, colSystemPersistent, colSystemInJson, colSystemTarget, colSystemStatus });
+            dgvSystemRoutes.Dock = DockStyle.Fill;
+            dgvSystemRoutes.Location = new Point(0, 44);
+            dgvSystemRoutes.Name = "dgvSystemRoutes";
+            dgvSystemRoutes.ReadOnly = true;
+            dgvSystemRoutes.RowHeadersVisible = false;
+            dgvSystemRoutes.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvSystemRoutes.Size = new Size(1168, 574);
+            dgvSystemRoutes.TabIndex = 1;
+            // 
+            // colSystemIp
+            // 
+            colSystemIp.HeaderText = "IP";
+            colSystemIp.Name = "colSystemIp";
+            colSystemIp.ReadOnly = true;
+            // 
+            // colSystemGateway
+            // 
+            colSystemGateway.HeaderText = "Gateway";
+            colSystemGateway.Name = "colSystemGateway";
+            colSystemGateway.ReadOnly = true;
+            // 
+            // colSystemInterface
+            // 
+            colSystemInterface.HeaderText = "Interface";
+            colSystemInterface.Name = "colSystemInterface";
+            colSystemInterface.ReadOnly = true;
+            // 
+            // colSystemMetric
+            // 
+            colSystemMetric.HeaderText = "Metric";
+            colSystemMetric.Name = "colSystemMetric";
+            colSystemMetric.ReadOnly = true;
+            // 
+            // colSystemActive
+            // 
+            colSystemActive.HeaderText = "Active";
+            colSystemActive.Name = "colSystemActive";
+            colSystemActive.ReadOnly = true;
+            // 
+            // colSystemPersistent
+            // 
+            colSystemPersistent.HeaderText = "Persistent";
+            colSystemPersistent.Name = "colSystemPersistent";
+            colSystemPersistent.ReadOnly = true;
+            // 
+            // colSystemInJson
+            // 
+            colSystemInJson.HeaderText = "InJson";
+            colSystemInJson.Name = "colSystemInJson";
+            colSystemInJson.ReadOnly = true;
+            // 
+            // colSystemTarget
+            // 
+            colSystemTarget.HeaderText = "Target";
+            colSystemTarget.Name = "colSystemTarget";
+            colSystemTarget.ReadOnly = true;
+            // 
+            // colSystemStatus
+            // 
+            colSystemStatus.HeaderText = "Status";
+            colSystemStatus.Name = "colSystemStatus";
+            colSystemStatus.ReadOnly = true;
+            // 
+            // panelSystemActions
+            // 
+            panelSystemActions.Controls.Add(flowSystemActions);
+            panelSystemActions.Dock = DockStyle.Top;
+            panelSystemActions.Location = new Point(0, 0);
+            panelSystemActions.Name = "panelSystemActions";
+            panelSystemActions.Padding = new Padding(8);
+            panelSystemActions.Size = new Size(1168, 44);
+            panelSystemActions.TabIndex = 0;
+            // 
+            // flowSystemActions
+            // 
+            flowSystemActions.Controls.Add(btnLoadSystemRoutes);
+            flowSystemActions.Controls.Add(btnCompareRoutes);
+            flowSystemActions.Controls.Add(btnRefreshSystemRoutes);
+            flowSystemActions.Dock = DockStyle.Fill;
+            flowSystemActions.Location = new Point(8, 8);
+            flowSystemActions.Margin = new Padding(0);
+            flowSystemActions.Name = "flowSystemActions";
+            flowSystemActions.Size = new Size(1152, 28);
+            flowSystemActions.TabIndex = 0;
+            flowSystemActions.WrapContents = false;
+            // 
+            // btnLoadSystemRoutes
+            // 
+            btnLoadSystemRoutes.AutoSize = true;
+            btnLoadSystemRoutes.Location = new Point(3, 3);
+            btnLoadSystemRoutes.Name = "btnLoadSystemRoutes";
+            btnLoadSystemRoutes.Size = new Size(139, 25);
+            btnLoadSystemRoutes.TabIndex = 0;
+            btnLoadSystemRoutes.Text = "Загрузить маршруты";
+            btnLoadSystemRoutes.UseVisualStyleBackColor = true;
+            // 
+            // btnCompareRoutes
+            // 
+            btnCompareRoutes.AutoSize = true;
+            btnCompareRoutes.Location = new Point(148, 3);
+            btnCompareRoutes.Name = "btnCompareRoutes";
+            btnCompareRoutes.Size = new Size(129, 25);
+            btnCompareRoutes.TabIndex = 1;
+            btnCompareRoutes.Text = "Сравнить с JSON";
+            btnCompareRoutes.UseVisualStyleBackColor = true;
+            // 
+            // btnRefreshSystemRoutes
+            // 
+            btnRefreshSystemRoutes.AutoSize = true;
+            btnRefreshSystemRoutes.Location = new Point(283, 3);
+            btnRefreshSystemRoutes.Name = "btnRefreshSystemRoutes";
+            btnRefreshSystemRoutes.Size = new Size(88, 25);
+            btnRefreshSystemRoutes.TabIndex = 2;
+            btnRefreshSystemRoutes.Text = "Обновить";
+            btnRefreshSystemRoutes.UseVisualStyleBackColor = true;
             // 
             // statusStrip
             // 
@@ -494,6 +682,8 @@
             topButtonsLayout.ResumeLayout(false);
             topButtonsLayout.PerformLayout();
             mainPanel.ResumeLayout(false);
+            tabControlMain.ResumeLayout(false);
+            tabRecords.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvRules).EndInit();
             detailsPanel.ResumeLayout(false);
             bottomLayout.ResumeLayout(false);
@@ -501,6 +691,11 @@
             detailsLayout.ResumeLayout(false);
             detailsLayout.PerformLayout();
             grpLog.ResumeLayout(false);
+            tabSystemRoutes.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvSystemRoutes).EndInit();
+            panelSystemActions.ResumeLayout(false);
+            flowSystemActions.ResumeLayout(false);
+            flowSystemActions.PerformLayout();
             statusStrip.ResumeLayout(false);
             statusStrip.PerformLayout();
             ResumeLayout(false);
@@ -518,6 +713,8 @@
         private Button btnRefresh;
         private Button btnApplyRoutes;
         private Panel mainPanel;
+        private TabControl tabControlMain;
+        private TabPage tabRecords;
         private DataGridView dgvRules;
         private DataGridViewTextBoxColumn colType;
         private DataGridViewTextBoxColumn colTarget;
@@ -527,6 +724,7 @@
         private DataGridViewTextBoxColumn colCreatedAt;
         private DataGridViewTextBoxColumn colUpdatedAt;
         private DataGridViewTextBoxColumn colCheckedAt;
+        private DataGridViewCheckBoxColumn colInSystem;
         private Panel detailsPanel;
         private TableLayoutPanel bottomLayout;
         private GroupBox grpDetails;
@@ -544,6 +742,22 @@
         private Button btnSave;
         private GroupBox grpLog;
         private RichTextBox rtbLog;
+        private TabPage tabSystemRoutes;
+        private DataGridView dgvSystemRoutes;
+        private DataGridViewTextBoxColumn colSystemIp;
+        private DataGridViewTextBoxColumn colSystemGateway;
+        private DataGridViewTextBoxColumn colSystemInterface;
+        private DataGridViewTextBoxColumn colSystemMetric;
+        private DataGridViewCheckBoxColumn colSystemActive;
+        private DataGridViewCheckBoxColumn colSystemPersistent;
+        private DataGridViewCheckBoxColumn colSystemInJson;
+        private DataGridViewTextBoxColumn colSystemTarget;
+        private DataGridViewTextBoxColumn colSystemStatus;
+        private Panel panelSystemActions;
+        private FlowLayoutPanel flowSystemActions;
+        private Button btnLoadSystemRoutes;
+        private Button btnCompareRoutes;
+        private Button btnRefreshSystemRoutes;
         private StatusStrip statusStrip;
         private ToolStripStatusLabel lblStatus;
     }
