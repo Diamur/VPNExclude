@@ -62,5 +62,19 @@
         "CreatedAt":  "2026-04-16 14:50:31",
         "UpdatedAt":  null,
         "LastCheckedAt":  "2026-04-16 14:50:44"
+    },
+    {
+        "Target":  "web.max.ru",
+        "Type":  "Domain",
+        "Ips":  [
+                    "155.212.204.78",
+                    "155.212.204.193",
+                    "155.212.204.143"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 15:02:53",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 15:02:53"
     }
 ]
