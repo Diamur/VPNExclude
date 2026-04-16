@@ -11,3 +11,7 @@ Files: App/VPNExclude/Form1.Designer.cs
 Files: App/VPNExclude/Form1.cs, App/VPNExclude/ExclusionRule.cs, App/VPNExclude/Form1.Designer.cs
 - Добавлены загрузка/сохранение JSON, CRUD через UI, выбор записи и обновление таблицы с логом и статусом.
 - Реализованы DNS-проверка для Domain и безопасная заглушка для кнопки применения маршрутов.
+2026-04-16 — Исправление проверки/сохранения Domain IP
+Files: App/VPNExclude/Form1.cs
+- Проверка домена теперь логирует полный список IPv4 и сразу обновляет текущую запись/строку таблицы.
+- При сохранении Domain с пустым IP добавлен авто-DNS-резолв; без найденных IP запись не сохраняется.

@@ -256,6 +256,26 @@ namespace VPNExclude
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            if (type.Equals("Domain", StringComparison.OrdinalIgnoreCase) && ips.Count == 0)
+            {
+                if (!TryResolveDomainIpv4(target, out var resolvedIps, out var errorMessage))
+                {
+                    MessageBox.Show(
+                        $"Не удалось сохранить Domain-запись без IP. {errorMessage}",
+                        "Проверка домена",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    SetStatus("Сохранение отменено: не удалось получить IP домена");
+                    AddLog($"Сохранение отменено для {target}: {errorMessage}");
+                    return;
+                }
+
+                ips = resolvedIps;
+                txtIps.Text = string.Join(", ", ips);
+                _pendingCheckedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                AddLog($"Автоподстановка IP для домена {target}: {txtIps.Text}");
+            }
+
             if (type.Equals("IP", StringComparison.OrdinalIgnoreCase) && ips.Count == 0)
             {
                 ips.Add(target);
@@ -303,6 +323,11 @@ namespace VPNExclude
 
             RefreshGridAndSelection();
             SetStatus("Изменения сохранены");
+
+            if (type.Equals("Domain", StringComparison.OrdinalIgnoreCase))
+            {
+                AddLog($"Сохранена Domain-запись {target} с IP: {string.Join(", ", ips)}");
+            }
         }
 
         private bool SaveRulesToDisk()
@@ -413,22 +438,63 @@ namespace VPNExclude
                     return;
                 }
 
-                txtIps.Text = string.Join(", ", uniqueIpv4);
+                var ipListAsText = string.Join(", ", uniqueIpv4);
+                txtIps.Text = ipListAsText;
                 _pendingCheckedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 if (_selectedRule != null)
                 {
+                    _selectedRule.Ips = uniqueIpv4;
                     _selectedRule.CheckedAt = _pendingCheckedAt;
+                    RefreshGridAndSelection();
                 }
 
-                SetStatus($"Проверка домена выполнена: {uniqueIpv4.Count} IP");
-                AddLog($"Проверка домена {target}: найдено {uniqueIpv4.Count} IP.");
+                var statusWithIps = uniqueIpv4.Count == 1
+                    ? $"Проверка домена: {uniqueIpv4[0]}"
+                    : $"Проверка домена: {uniqueIpv4[0]} (+{uniqueIpv4.Count - 1})";
+
+                SetStatus(statusWithIps);
+                AddLog($"Проверка домена {target}: {ipListAsText}");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка DNS-запроса:\n{ex.Message}", "Проверка домена", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("Ошибка проверки домена");
                 AddLog($"Ошибка DNS-проверки для {target}: {ex.Message}");
+            }
+        }
+
+        private static bool TryResolveDomainIpv4(string domain, out List<string> ips, out string errorMessage)
+        {
+            ips = new List<string>();
+            errorMessage = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(domain) || Uri.CheckHostName(domain) != UriHostNameType.Dns)
+            {
+                errorMessage = "Введите корректное доменное имя в Target.";
+                return false;
+            }
+
+            try
+            {
+                ips = Dns.GetHostAddresses(domain)
+                    .Where(ip => ip.AddressFamily == AddressFamily.InterNetwork)
+                    .Select(ip => ip.ToString())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (ips.Count == 0)
+                {
+                    errorMessage = "DNS не вернул IPv4-адреса для домена.";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Ошибка DNS: {ex.Message}";
+                return false;
             }
         }
 
