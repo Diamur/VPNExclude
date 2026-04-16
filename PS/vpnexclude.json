@@ -1,0 +1,66 @@
+﻿[
+    {
+        "Target":  "school.mos.ru",
+        "Type":  "Domain",
+        "Ips":  [
+                    "94.79.51.186",
+                    "94.79.51.185",
+                    "94.79.51.184"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 12:11:16",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 14:00:36"
+    },
+    {
+        "Target":  "178.72.135.98",
+        "Type":  "IP",
+        "Ips":  [
+                    "178.72.135.98"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "asmeta proxmox 8006",
+        "CreatedAt":  "2026-04-16 12:27:30",
+        "UpdatedAt":  "2026-04-16 14:53:56",
+        "LastCheckedAt":  null
+    },
+    {
+        "Target":  "login.mos.ru",
+        "Type":  "Domain",
+        "Ips":  [
+                    "94.79.51.135"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 14:39:57",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 14:41:33"
+    },
+    {
+        "Target":  "mos.ru",
+        "Type":  "Domain",
+        "Ips":  [
+                    "94.79.51.169",
+                    "212.11.151.58"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 14:41:54",
+        "UpdatedAt":  "2026-04-16 14:42:33",
+        "LastCheckedAt":  "2026-04-16 14:42:33"
+    },
+    {
+        "Target":  "ozon.ru",
+        "Type":  "Domain",
+        "Ips":  [
+                    "185.73.193.68",
+                    "185.73.194.82"
+                ],
+        "Gateway":  "192.168.1.1",
+        "Comment":  "",
+        "CreatedAt":  "2026-04-16 14:50:31",
+        "UpdatedAt":  null,
+        "LastCheckedAt":  "2026-04-16 14:50:44"
+    }
+]
