@@ -548,6 +548,8 @@ namespace VPNExclude
 
                 SetStatus($"Загружено {_systemRoutes.Count} системных host-маршрутов");
                 AddLog($"Загружено {_systemRoutes.Count} системных host-маршрутов.");
+                var gatewayCount = _systemRoutes.Count(route => string.Equals(route.Gateway, "192.168.1.1", StringComparison.OrdinalIgnoreCase));
+                AddLog($"Найдено {gatewayCount} маршрутов через 192.168.1.1.");
             }
             catch (Exception ex)
             {
@@ -586,6 +588,7 @@ namespace VPNExclude
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.StdErr) ? result.StdOut : result.StdErr);
             }
 
+            WriteRouteDebugOutput(result.StdOut);
             var routes = new Dictionary<string, SystemRouteInfo>(StringComparer.OrdinalIgnoreCase);
             var lines = result.StdOut.Replace("\r", string.Empty).Split('\n');
 
@@ -614,73 +617,146 @@ namespace VPNExclude
                     continue;
                 }
 
+                if (line.StartsWith("Активные маршруты", StringComparison.OrdinalIgnoreCase))
+                {
+                    inActive = true;
+                    inPersistent = false;
+                    continue;
+                }
+
+                if (line.StartsWith("Постоянные маршруты", StringComparison.OrdinalIgnoreCase))
+                {
+                    inActive = false;
+                    inPersistent = true;
+                    continue;
+                }
+
                 if (line.StartsWith("====") || line.StartsWith("Network Destination", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                var parts = Regex.Split(line, @"\s+");
-                if (inActive && parts.Length >= 5)
+                if (line.StartsWith("Сетевой адрес", StringComparison.OrdinalIgnoreCase) || line.StartsWith("Адрес сети", StringComparison.OrdinalIgnoreCase))
                 {
-                    var destination = parts[0];
-                    var mask = parts[1];
-                    var gateway = parts[2];
-                    var iface = parts[3];
-                    var metric = parts[4];
+                    continue;
+                }
 
-                    if (!IsHostRouteCandidate(destination, mask, gateway))
-                    {
-                        continue;
-                    }
-
-                    var key = $"{destination}|{gateway}";
+                var parts = Regex.Split(line, @"\s+");
+                if (inActive && TryParseActiveRoute(parts, out var activeRoute))
+                {
+                    var key = $"{activeRoute.Ip}|{activeRoute.Gateway}";
                     if (!routes.TryGetValue(key, out var route))
                     {
-                        route = new SystemRouteInfo { Ip = destination, Gateway = gateway, Interface = iface, Metric = metric };
+                        route = new SystemRouteInfo
+                        {
+                            Ip = activeRoute.Ip,
+                            Gateway = activeRoute.Gateway,
+                            Interface = activeRoute.Interface,
+                            Metric = activeRoute.Metric
+                        };
                         routes[key] = route;
                     }
 
                     route.Active = true;
                     if (string.IsNullOrWhiteSpace(route.Interface))
                     {
-                        route.Interface = iface;
+                        route.Interface = activeRoute.Interface;
                     }
                     if (string.IsNullOrWhiteSpace(route.Metric))
                     {
-                        route.Metric = metric;
+                        route.Metric = activeRoute.Metric;
                     }
 
                     continue;
                 }
 
-                if (inPersistent && parts.Length >= 4)
+                if (inPersistent && TryParsePersistentRoute(parts, out var persistentRoute))
                 {
-                    var destination = parts[0];
-                    var mask = parts[1];
-                    var gateway = parts[2];
-                    var metric = parts[3];
-
-                    if (!IsHostRouteCandidate(destination, mask, gateway))
-                    {
-                        continue;
-                    }
-
-                    var key = $"{destination}|{gateway}";
+                    var key = $"{persistentRoute.Ip}|{persistentRoute.Gateway}";
                     if (!routes.TryGetValue(key, out var route))
                     {
-                        route = new SystemRouteInfo { Ip = destination, Gateway = gateway, Metric = metric };
+                        route = new SystemRouteInfo
+                        {
+                            Ip = persistentRoute.Ip,
+                            Gateway = persistentRoute.Gateway,
+                            Metric = persistentRoute.Metric
+                        };
                         routes[key] = route;
                     }
 
                     route.Persistent = true;
                     if (string.IsNullOrWhiteSpace(route.Metric))
                     {
-                        route.Metric = metric;
+                        route.Metric = persistentRoute.Metric;
                     }
                 }
             }
 
+            AddLog($"Парсер распознал {routes.Count} host-маршрутов из route print -4.");
             return routes.Values.OrderBy(route => route.Ip, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private sealed class ParsedRouteCandidate
+        {
+            public string Ip { get; set; } = string.Empty;
+            public string Gateway { get; set; } = string.Empty;
+            public string Interface { get; set; } = string.Empty;
+            public string Metric { get; set; } = string.Empty;
+        }
+
+        private static bool TryParseActiveRoute(string[] parts, out ParsedRouteCandidate route)
+        {
+            route = new ParsedRouteCandidate();
+            if (parts.Length < 5)
+            {
+                return false;
+            }
+
+            var destination = parts[0];
+            var mask = parts[1];
+            var gateway = parts[2];
+            var iface = parts[3];
+            var metric = parts[4];
+
+            if (!IsHostRouteCandidate(destination, mask, gateway))
+            {
+                return false;
+            }
+
+            if (!IsValidIpv4(iface))
+            {
+                return false;
+            }
+
+            route.Ip = destination;
+            route.Gateway = gateway;
+            route.Interface = iface;
+            route.Metric = metric;
+            return true;
+        }
+
+        private static bool TryParsePersistentRoute(string[] parts, out ParsedRouteCandidate route)
+        {
+            route = new ParsedRouteCandidate();
+            if (parts.Length < 4)
+            {
+                return false;
+            }
+
+            var destination = parts[0];
+            var mask = parts[1];
+            var gateway = parts[2];
+            var metric = parts[3];
+
+            if (!IsHostRouteCandidate(destination, mask, gateway))
+            {
+                return false;
+            }
+
+            route.Ip = destination;
+            route.Gateway = gateway;
+            route.Metric = metric;
+            return true;
         }
 
         private static bool IsHostRouteCandidate(string destination, string mask, string gateway)
@@ -883,6 +959,19 @@ namespace VPNExclude
             }
 
             SetStatus($"Маршруты применены: добавлено {added}, уже было {existed}, ошибок {failed}");
+
+            try
+            {
+                _systemRoutes.Clear();
+                _systemRoutes.AddRange(LoadSystemHostRoutes());
+                PopulateSystemRoutesGrid(includeComparison: false);
+                RefreshGridAndSelection();
+                LogRulesInSystemSummary();
+            }
+            catch (Exception ex)
+            {
+                AddLog($"Не удалось обновить список системных маршрутов после применения: {ex.Message}");
+            }
         }
 
         private static bool IsRunningAsAdministrator()
@@ -989,6 +1078,20 @@ namespace VPNExclude
         }
 
         private readonly record struct ProcessResult(int ExitCode, string StdOut, string StdErr);
+
+        private void WriteRouteDebugOutput(string rawOutput)
+        {
+            try
+            {
+                var debugPath = Path.Combine(AppContext.BaseDirectory, "route_print_debug.log");
+                File.WriteAllText(debugPath, rawOutput);
+                AddLog($"RAW route print -4 сохранён в debug-файл: {debugPath}");
+            }
+            catch (Exception ex)
+            {
+                AddLog($"Не удалось сохранить debug-файл route print: {ex.Message}");
+            }
+        }
 
         private void SetStatus(string message)
         {
