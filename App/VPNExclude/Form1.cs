@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Diagnostics;
 using System.Security.Principal;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace VPNExclude
@@ -11,6 +12,7 @@ namespace VPNExclude
     {
         private const string DefaultGateway = "192.168.1.1";
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions RouteJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         private readonly List<ExclusionRule> _rules = new();
         private readonly List<SystemRouteInfo> _systemRoutes = new();
@@ -582,205 +584,163 @@ namespace VPNExclude
 
         private List<SystemRouteInfo> LoadSystemHostRoutes()
         {
-            var result = RunProcess("route.exe", "print -4");
-            if (result.ExitCode != 0)
-            {
-                throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.StdErr) ? result.StdOut : result.StdErr);
-            }
+            const string activeQuery = "Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore | Select-Object ifIndex,DestinationPrefix,NextHop,RouteMetric,ifMetric,InterfaceAlias | ConvertTo-Json -Depth 3";
+            const string persistentQuery = "Get-NetRoute -AddressFamily IPv4 -PolicyStore PersistentStore | Select-Object ifIndex,DestinationPrefix,NextHop,RouteMetric,ifMetric,InterfaceAlias | ConvertTo-Json -Depth 3";
+            const string fallbackQuery = "Get-NetRoute -AddressFamily IPv4 | Select-Object ifIndex,DestinationPrefix,NextHop,RouteMetric,ifMetric,InterfaceAlias | ConvertTo-Json -Depth 3";
 
-            WriteRouteDebugOutput(result.StdOut);
+            var activeResult = RunProcess("powershell.exe", $"-NoProfile -Command "{activeQuery}"");
+            if (activeResult.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"ActiveStore: {GetProcessError(activeResult)}");
+            }
+            WriteRouteDebugOutput("get_netroute_active_debug.json", activeResult.StdOut);
+
+            var persistentResult = RunProcess("powershell.exe", $"-NoProfile -Command "{persistentQuery}"");
+            if (persistentResult.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"PersistentStore: {GetProcessError(persistentResult)}");
+            }
+            WriteRouteDebugOutput("get_netroute_persistent_debug.json", persistentResult.StdOut);
+
             var routes = new Dictionary<string, SystemRouteInfo>(StringComparer.OrdinalIgnoreCase);
-            var lines = result.StdOut.Replace("\r", string.Empty).Split('\n');
+            ParseNetRouteJsonInto(routes, activeResult.StdOut, isActive: true, isPersistent: false);
+            ParseNetRouteJsonInto(routes, persistentResult.StdOut, isActive: false, isPersistent: true);
 
-            var inActive = false;
-            var inPersistent = false;
-
-            foreach (var rawLine in lines)
+            if (routes.Count == 0)
             {
-                var line = rawLine.Trim();
-                if (string.IsNullOrWhiteSpace(line))
+                var fallbackResult = RunProcess("powershell.exe", $"-NoProfile -Command "{fallbackQuery}"");
+                if (fallbackResult.ExitCode != 0)
                 {
-                    continue;
+                    throw new InvalidOperationException($"Fallback Get-NetRoute: {GetProcessError(fallbackResult)}");
                 }
-
-                if (line.StartsWith("Active Routes:", StringComparison.OrdinalIgnoreCase))
-                {
-                    inActive = true;
-                    inPersistent = false;
-                    continue;
-                }
-
-                if (line.StartsWith("Persistent Routes:", StringComparison.OrdinalIgnoreCase))
-                {
-                    inActive = false;
-                    inPersistent = true;
-                    continue;
-                }
-
-                if (line.StartsWith("Активные маршруты", StringComparison.OrdinalIgnoreCase))
-                {
-                    inActive = true;
-                    inPersistent = false;
-                    continue;
-                }
-
-                if (line.StartsWith("Постоянные маршруты", StringComparison.OrdinalIgnoreCase))
-                {
-                    inActive = false;
-                    inPersistent = true;
-                    continue;
-                }
-
-                if (line.StartsWith("====") || line.StartsWith("Network Destination", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (line.StartsWith("Сетевой адрес", StringComparison.OrdinalIgnoreCase) || line.StartsWith("Адрес сети", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var parts = Regex.Split(line, @"\s+");
-                if (inActive && TryParseActiveRoute(parts, out var activeRoute))
-                {
-                    var key = $"{activeRoute.Ip}|{activeRoute.Gateway}";
-                    if (!routes.TryGetValue(key, out var route))
-                    {
-                        route = new SystemRouteInfo
-                        {
-                            Ip = activeRoute.Ip,
-                            Gateway = activeRoute.Gateway,
-                            Interface = activeRoute.Interface,
-                            Metric = activeRoute.Metric
-                        };
-                        routes[key] = route;
-                    }
-
-                    route.Active = true;
-                    if (string.IsNullOrWhiteSpace(route.Interface))
-                    {
-                        route.Interface = activeRoute.Interface;
-                    }
-                    if (string.IsNullOrWhiteSpace(route.Metric))
-                    {
-                        route.Metric = activeRoute.Metric;
-                    }
-
-                    continue;
-                }
-
-                if (inPersistent && TryParsePersistentRoute(parts, out var persistentRoute))
-                {
-                    var key = $"{persistentRoute.Ip}|{persistentRoute.Gateway}";
-                    if (!routes.TryGetValue(key, out var route))
-                    {
-                        route = new SystemRouteInfo
-                        {
-                            Ip = persistentRoute.Ip,
-                            Gateway = persistentRoute.Gateway,
-                            Metric = persistentRoute.Metric
-                        };
-                        routes[key] = route;
-                    }
-
-                    route.Persistent = true;
-                    if (string.IsNullOrWhiteSpace(route.Metric))
-                    {
-                        route.Metric = persistentRoute.Metric;
-                    }
-                }
+                WriteRouteDebugOutput("get_netroute_fallback_debug.json", fallbackResult.StdOut);
+                ParseNetRouteJsonInto(routes, fallbackResult.StdOut, isActive: true, isPersistent: false);
             }
 
-            AddLog($"Парсер распознал {routes.Count} host-маршрутов из route print -4.");
+            AddLog($"Парсер JSON распознал {routes.Count} host-маршрутов.");
             return routes.Values.OrderBy(route => route.Ip, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        private sealed class ParsedRouteCandidate
+        private sealed class NetRouteJsonEntry
         {
-            public string Ip { get; set; } = string.Empty;
-            public string Gateway { get; set; } = string.Empty;
-            public string Interface { get; set; } = string.Empty;
-            public string Metric { get; set; } = string.Empty;
+            [JsonPropertyName("ifIndex")]
+            public int? IfIndex { get; set; }
+
+            [JsonPropertyName("DestinationPrefix")]
+            public string? DestinationPrefix { get; set; }
+
+            [JsonPropertyName("NextHop")]
+            public string? NextHop { get; set; }
+
+            [JsonPropertyName("RouteMetric")]
+            public int? RouteMetric { get; set; }
+
+            [JsonPropertyName("ifMetric")]
+            public int? IfMetric { get; set; }
+
+            [JsonPropertyName("InterfaceAlias")]
+            public string? InterfaceAlias { get; set; }
         }
 
-        private static bool TryParseActiveRoute(string[] parts, out ParsedRouteCandidate route)
+        private void ParseNetRouteJsonInto(
+            IDictionary<string, SystemRouteInfo> routes,
+            string rawJson,
+            bool isActive,
+            bool isPersistent)
         {
-            route = new ParsedRouteCandidate();
-            if (parts.Length < 5)
+            if (string.IsNullOrWhiteSpace(rawJson))
             {
-                return false;
+                return;
             }
 
-            var destination = parts[0];
-            var mask = parts[1];
-            var gateway = parts[2];
-            var iface = parts[3];
-            var metric = parts[4];
+            var trimmed = rawJson.Trim();
+            List<NetRouteJsonEntry> entries;
 
-            if (!IsHostRouteCandidate(destination, mask, gateway))
+            if (trimmed.StartsWith("[", StringComparison.Ordinal))
             {
-                return false;
+                entries = JsonSerializer.Deserialize<List<NetRouteJsonEntry>>(trimmed, RouteJsonOptions) ?? new List<NetRouteJsonEntry>();
+            }
+            else
+            {
+                var single = JsonSerializer.Deserialize<NetRouteJsonEntry>(trimmed, RouteJsonOptions);
+                entries = single == null ? new List<NetRouteJsonEntry>() : new List<NetRouteJsonEntry> { single };
             }
 
-            if (!IsValidIpv4(iface))
+            foreach (var entry in entries)
             {
-                return false;
-            }
+                if (!TryMapJsonEntryToHostRoute(entry, out var ip, out var gateway, out var iface, out var metric))
+                {
+                    continue;
+                }
 
-            route.Ip = destination;
-            route.Gateway = gateway;
-            route.Interface = iface;
-            route.Metric = metric;
-            return true;
+                var key = $"{ip}|{gateway}";
+                if (!routes.TryGetValue(key, out var route))
+                {
+                    route = new SystemRouteInfo
+                    {
+                        Ip = ip,
+                        Gateway = gateway,
+                        Interface = iface,
+                        Metric = metric
+                    };
+                    routes[key] = route;
+                }
+
+                route.Active |= isActive;
+                route.Persistent |= isPersistent;
+
+                if (string.IsNullOrWhiteSpace(route.Interface))
+                {
+                    route.Interface = iface;
+                }
+
+                if (string.IsNullOrWhiteSpace(route.Metric))
+                {
+                    route.Metric = metric;
+                }
+            }
         }
 
-        private static bool TryParsePersistentRoute(string[] parts, out ParsedRouteCandidate route)
+        private static bool TryMapJsonEntryToHostRoute(
+            NetRouteJsonEntry entry,
+            out string ip,
+            out string gateway,
+            out string iface,
+            out string metric)
         {
-            route = new ParsedRouteCandidate();
-            if (parts.Length < 4)
+            ip = string.Empty;
+            gateway = string.Empty;
+            iface = string.Empty;
+            metric = string.Empty;
+
+            if (entry.DestinationPrefix == null || entry.NextHop == null)
             {
                 return false;
             }
 
-            var destination = parts[0];
-            var mask = parts[1];
-            var gateway = parts[2];
-            var metric = parts[3];
-
-            if (!IsHostRouteCandidate(destination, mask, gateway))
+            var prefixParts = entry.DestinationPrefix.Split('/');
+            if (prefixParts.Length != 2 || prefixParts[1] != "32")
             {
                 return false;
             }
 
-            route.Ip = destination;
-            route.Gateway = gateway;
-            route.Metric = metric;
-            return true;
-        }
+            var destinationIp = prefixParts[0].Trim();
+            var nextHop = entry.NextHop.Trim();
 
-        private static bool IsHostRouteCandidate(string destination, string mask, string gateway)
-        {
-            if (!string.Equals(mask, "255.255.255.255", StringComparison.Ordinal))
+            if (!IsValidIpv4(destinationIp) || !IsValidIpv4(nextHop))
             {
                 return false;
             }
 
-            if (!IsValidIpv4(destination) || !IsValidIpv4(gateway))
+            if (nextHop == "0.0.0.0" || destinationIp.StartsWith("127.", StringComparison.Ordinal) || nextHop.StartsWith("127.", StringComparison.Ordinal))
             {
                 return false;
             }
 
-            if (destination.StartsWith("127.", StringComparison.Ordinal) || gateway.StartsWith("127.", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            if (string.Equals(gateway, "0.0.0.0", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
+            ip = destinationIp;
+            gateway = nextHop;
+            iface = string.IsNullOrWhiteSpace(entry.InterfaceAlias) ? $"ifIndex:{entry.IfIndex}" : entry.InterfaceAlias.Trim();
+            metric = entry.RouteMetric?.ToString() ?? entry.IfMetric?.ToString() ?? string.Empty;
             return true;
         }
 
@@ -1077,19 +1037,24 @@ namespace VPNExclude
             return new ProcessResult(process.ExitCode, stdOut, stdErr);
         }
 
+        private static string GetProcessError(ProcessResult result)
+        {
+            return string.IsNullOrWhiteSpace(result.StdErr) ? result.StdOut.Trim() : result.StdErr.Trim();
+        }
+
         private readonly record struct ProcessResult(int ExitCode, string StdOut, string StdErr);
 
-        private void WriteRouteDebugOutput(string rawOutput)
+        private void WriteRouteDebugOutput(string fileName, string rawOutput)
         {
             try
             {
-                var debugPath = Path.Combine(AppContext.BaseDirectory, "route_print_debug.log");
+                var debugPath = Path.Combine(AppContext.BaseDirectory, fileName);
                 File.WriteAllText(debugPath, rawOutput);
-                AddLog($"RAW route print -4 сохранён в debug-файл: {debugPath}");
+                AddLog($"RAW JSON маршрутов сохранён в debug-файл: {debugPath}");
             }
             catch (Exception ex)
             {
-                AddLog($"Не удалось сохранить debug-файл route print: {ex.Message}");
+                AddLog($"Не удалось сохранить debug-файл маршрутов: {ex.Message}");
             }
         }
 

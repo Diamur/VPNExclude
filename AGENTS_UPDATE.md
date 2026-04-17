@@ -31,3 +31,7 @@ Files: App/VPNExclude/Form1.Designer.cs, App/VPNExclude/Form1.cs
 Files: App/VPNExclude/Form1.cs
 - Парсер route print -4 сделан устойчивее к русской/английской локали, добавлен debug-дамп сырого stdout в route_print_debug.log.
 - Исправлен пересчёт признака "В системе" после загрузки/сравнения/применения маршрутов с обновлением таблиц и сводным логом.
+2026-04-17 — Переход загрузки системных маршрутов на Get-NetRoute JSON
+Files: App/VPNExclude/Form1.cs
+- Основной источник системных маршрутов переведён с текстового route print на PowerShell Get-NetRoute + ConvertTo-Json (Active/Persistent + fallback).
+- Добавлены debug-дампы raw JSON и сохранён пересчёт colInSystem после загрузки/сравнения/применения.
