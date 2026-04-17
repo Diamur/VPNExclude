@@ -35,3 +35,7 @@ Files: App/VPNExclude/Form1.cs
 Files: App/VPNExclude/Form1.cs
 - Основной источник системных маршрутов переведён с текстового route print на PowerShell Get-NetRoute + ConvertTo-Json (Active/Persistent + fallback).
 - Добавлены debug-дампы raw JSON и сохранён пересчёт colInSystem после загрузки/сравнения/применения.
+2026-04-17 — Синхронное удаление записи и host-маршрутов
+Files: App/VPNExclude/Form1.cs
+- btnDelete теперь удаляет системные host-маршруты записи (с проверкой admin, shared IP и откатом удаления JSON при ошибках).
+- Исправлен запуск PowerShell-команд Get-NetRoute через -EncodedCommand, чтобы исключить ошибки экранирования кавычек.

@@ -391,8 +391,14 @@ namespace VPNExclude
                 return;
             }
 
+            var ruleToDelete = _selectedRule;
+            var removedTarget = ruleToDelete.Target;
+            var removedType = ruleToDelete.Type;
+            var gateway = string.IsNullOrWhiteSpace(ruleToDelete.Gateway) ? DefaultGateway : ruleToDelete.Gateway.Trim();
+            var ipsToProcess = NormalizeIpv4List(ruleToDelete.Ips);
+
             var confirmation = MessageBox.Show(
-                $"Удалить запись '{_selectedRule.Target}'?",
+                $"Удалить запись '{removedTarget}' и связанные host-маршруты из Windows?",
                 "Подтверждение удаления",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -404,8 +410,66 @@ namespace VPNExclude
                 return;
             }
 
-            var removedTarget = _selectedRule.Target;
-            _rules.Remove(_selectedRule);
+            AddLog($"Начато удаление записи {removedTarget} ({removedType}).");
+
+            if (ipsToProcess.Count > 0 && !IsRunningAsAdministrator())
+            {
+                const string message = "Для удаления записи с системными маршрутами нужно запустить приложение от имени администратора.";
+                MessageBox.Show(message, "Недостаточно прав", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Удаление отменено: нет прав администратора");
+                AddLog(message);
+                return;
+            }
+
+            var deletedRoutes = 0;
+            var alreadyMissingRoutes = 0;
+            var skippedSharedRoutes = 0;
+            var routeDeletionErrors = new List<string>();
+
+            foreach (var ip in ipsToProcess)
+            {
+                if (IsIpUsedByOtherRules(ip, ruleToDelete))
+                {
+                    skippedSharedRoutes++;
+                    AddLog($"Маршрут сохранён: {ip} используется другой записью JSON.");
+                    continue;
+                }
+
+                AddLog($"Удаление маршрута: {ip} -> {gateway}");
+                if (TryDeleteHostRoute(ip, gateway, out var alreadyAbsent, out var error))
+                {
+                    if (alreadyAbsent)
+                    {
+                        alreadyMissingRoutes++;
+                        AddLog($"Маршрут уже отсутствует: {ip}");
+                    }
+                    else
+                    {
+                        deletedRoutes++;
+                        AddLog($"Маршрут удалён: {ip}");
+                    }
+                }
+                else
+                {
+                    routeDeletionErrors.Add($"{ip}: {error}");
+                    AddLog($"Ошибка удаления маршрута {ip}: {error}");
+                }
+            }
+
+            if (routeDeletionErrors.Count > 0)
+            {
+                var errorText = string.Join(Environment.NewLine, routeDeletionErrors);
+                MessageBox.Show(
+                    $"Не удалось удалить все связанные системные маршруты. Запись не удалена.{Environment.NewLine}{errorText}",
+                    "Удаление",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                SetStatus("Удаление отменено: ошибка удаления системных маршрутов");
+                AddLog($"Удаление записи отменено из-за ошибок удаления маршрутов: {removedTarget}");
+                return;
+            }
+
+            _rules.Remove(ruleToDelete);
             _selectedRule = null;
             _pendingCheckedAt = null;
 
@@ -414,10 +478,24 @@ namespace VPNExclude
                 return;
             }
 
+            AddLog($"Запись удалена из JSON: {removedTarget}");
+
+            try
+            {
+                _systemRoutes.Clear();
+                _systemRoutes.AddRange(LoadSystemHostRoutes());
+                PopulateSystemRoutesGrid(includeComparison: false);
+                LogRulesInSystemSummary();
+            }
+            catch (Exception ex)
+            {
+                AddLog($"Не удалось обновить таблицу системных маршрутов после удаления: {ex.Message}");
+            }
+
             RefreshGridAndSelection();
             ClearDetailsFields(false);
-            SetStatus("Запись удалена");
-            AddLog($"Запись удалена: {removedTarget}");
+            SetStatus($"Синхронизация завершена: удалено маршрутов {deletedRoutes}, уже отсутствовали {alreadyMissingRoutes}, сохранено (shared) {skippedSharedRoutes}");
+            AddLog($"Синхронизация завершена: удалено маршрутов {deletedRoutes}, уже отсутствовали {alreadyMissingRoutes}, сохранено shared {skippedSharedRoutes}");
         }
 
         private void BtnRefresh_Click(object? sender, EventArgs e)
@@ -588,14 +666,14 @@ namespace VPNExclude
             const string persistentQuery = "Get-NetRoute -AddressFamily IPv4 -PolicyStore PersistentStore | Select-Object ifIndex,DestinationPrefix,NextHop,RouteMetric,ifMetric,InterfaceAlias | ConvertTo-Json -Depth 3";
             const string fallbackQuery = "Get-NetRoute -AddressFamily IPv4 | Select-Object ifIndex,DestinationPrefix,NextHop,RouteMetric,ifMetric,InterfaceAlias | ConvertTo-Json -Depth 3";
 
-            var activeResult = RunProcess("powershell.exe", $"-NoProfile -Command "{activeQuery}"");
+            var activeResult = RunPowerShellQuery(activeQuery);
             if (activeResult.ExitCode != 0)
             {
                 throw new InvalidOperationException($"ActiveStore: {GetProcessError(activeResult)}");
             }
             WriteRouteDebugOutput("get_netroute_active_debug.json", activeResult.StdOut);
 
-            var persistentResult = RunProcess("powershell.exe", $"-NoProfile -Command "{persistentQuery}"");
+            var persistentResult = RunPowerShellQuery(persistentQuery);
             if (persistentResult.ExitCode != 0)
             {
                 throw new InvalidOperationException($"PersistentStore: {GetProcessError(persistentResult)}");
@@ -608,7 +686,7 @@ namespace VPNExclude
 
             if (routes.Count == 0)
             {
-                var fallbackResult = RunProcess("powershell.exe", $"-NoProfile -Command "{fallbackQuery}"");
+                var fallbackResult = RunPowerShellQuery(fallbackQuery);
                 if (fallbackResult.ExitCode != 0)
                 {
                     throw new InvalidOperationException($"Fallback Get-NetRoute: {GetProcessError(fallbackResult)}");
@@ -1014,6 +1092,69 @@ namespace VPNExclude
             var normalizedOutput = printResult.StdOut.Replace("\r", string.Empty);
             var pattern = $@"^\s*{Regex.Escape(ip)}\s+255\.255\.255\.255\s+{Regex.Escape(gateway)}\s+";
             return Regex.IsMatch(normalizedOutput, pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+
+        private static ProcessResult RunPowerShellQuery(string query)
+        {
+            var encodedCommand = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(query));
+            return RunProcess("powershell.exe", $"-NoProfile -EncodedCommand {encodedCommand}");
+        }
+
+        private bool TryDeleteHostRoute(string ip, string gateway, out bool alreadyAbsent, out string error)
+        {
+            alreadyAbsent = false;
+            error = string.Empty;
+
+            var deleteResult = RunProcess("route.exe", $"delete {ip} mask 255.255.255.255 {gateway}");
+            if (deleteResult.ExitCode == 0)
+            {
+                return true;
+            }
+
+            var errorText = GetProcessError(deleteResult);
+            if (IsRouteAlreadyAbsent(errorText))
+            {
+                alreadyAbsent = true;
+                return true;
+            }
+
+            error = string.IsNullOrWhiteSpace(errorText)
+                ? "Неизвестная ошибка удаления маршрута."
+                : errorText;
+            return false;
+        }
+
+        private static bool IsRouteAlreadyAbsent(string processOutput)
+        {
+            if (string.IsNullOrWhiteSpace(processOutput))
+            {
+                return false;
+            }
+
+            var normalized = processOutput.ToLowerInvariant();
+            return normalized.Contains("not found", StringComparison.Ordinal)
+                || normalized.Contains("the route specified was not found", StringComparison.Ordinal)
+                || normalized.Contains("элемент не найден", StringComparison.Ordinal)
+                || normalized.Contains("маршрут не найден", StringComparison.Ordinal);
+        }
+
+        private bool IsIpUsedByOtherRules(string ip, ExclusionRule excludedRule)
+        {
+            foreach (var rule in _rules)
+            {
+                if (ReferenceEquals(rule, excludedRule))
+                {
+                    continue;
+                }
+
+                var normalizedIps = NormalizeIpv4List(rule.Ips);
+                if (normalizedIps.Contains(ip, StringComparer.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static ProcessResult RunProcess(string fileName, string arguments)
