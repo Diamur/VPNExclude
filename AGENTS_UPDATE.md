@@ -39,3 +39,8 @@ Files: App/VPNExclude/Form1.cs
 Files: App/VPNExclude/Form1.cs
 - btnDelete теперь удаляет системные host-маршруты записи (с проверкой admin, shared IP и откатом удаления JSON при ошибках).
 - Исправлен запуск PowerShell-команд Get-NetRoute через -EncodedCommand, чтобы исключить ошибки экранирования кавычек.
+2026-04-18 — Стартовая форма-меню перед Form1
+Files: App/VPNExclude/StartForm.cs, App/VPNExclude/StartForm.Designer.cs, App/VPNExclude/Program.cs
+- Добавлена новая первичная форма StartForm (500x300, центр, фиксированный размер) с заголовком и 2 кнопками.
+- Реализован сценарий открытия Form1 из стартовой формы с возвратом обратно после закрытия Form1.
+- Добавлен запуск WireGuard через ProcessStartInfo с проверкой наличия файла и безопасной обработкой ошибок.
