@@ -150,5 +150,17 @@
     "CreatedAt": "2026-04-18 11:34:39",
     "UpdatedAt": null,
     "LastCheckedAt": "2026-04-18 11:34:39"
+  },
+  {
+    "Target": "94.103.13.92",
+    "Type": "IP",
+    "Ips": [
+      "94.103.13.92"
+    ],
+    "Gateway": "192.168.1.1",
+    "Comment": "",
+    "CreatedAt": "2026-04-18 14:22:58",
+    "UpdatedAt": null,
+    "LastCheckedAt": null
   }
 ]
