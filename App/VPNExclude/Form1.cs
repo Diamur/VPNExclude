@@ -38,8 +38,8 @@ namespace VPNExclude
             _jsonPath = ResolveJsonPath();
 
             dgvRules.SelectionChanged += DgvRules_SelectionChanged;
-            btnAddDomain.Click += (_, _) => BeginAddMode("Domain");
-            btnAddIp.Click += (_, _) => BeginAddMode("IP");
+            btnAddDomain.Click += BtnAddDomain_Click;
+            btnAddIp.Click += BtnAddIp_Click;
             btnSave.Click += BtnSave_Click;
             btnDelete.Click += BtnDelete_Click;
             btnRefresh.Click += BtnRefresh_Click;
@@ -223,6 +223,26 @@ namespace VPNExclude
             _pendingCheckedAt = rule.CheckedAt;
         }
 
+        private void SwitchToRecordsTab()
+        {
+            if (tabControlMain.SelectedTab != tabRecords)
+            {
+                tabControlMain.SelectedTab = tabRecords;
+            }
+        }
+
+        private void BtnAddDomain_Click(object? sender, EventArgs e)
+        {
+            SwitchToRecordsTab();
+            BeginAddMode("Domain");
+        }
+
+        private void BtnAddIp_Click(object? sender, EventArgs e)
+        {
+            SwitchToRecordsTab();
+            BeginAddMode("IP");
+        }
+
         private void BeginAddMode(string type)
         {
             _selectedRule = null;
@@ -385,6 +405,7 @@ namespace VPNExclude
 
         private void BtnSaveJson_Click(object? sender, EventArgs e)
         {
+            SwitchToRecordsTab();
             using var saveDialog = new SaveFileDialog
             {
                 Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
@@ -419,6 +440,7 @@ namespace VPNExclude
 
         private void BtnLoadJson_Click(object? sender, EventArgs e)
         {
+            SwitchToRecordsTab();
             var confirmation = MessageBox.Show(
                 "Выбранный JSON заменит текущие записи приложения. Продолжить?",
                 "Подтверждение импорта JSON",
@@ -497,6 +519,7 @@ namespace VPNExclude
 
         private void BtnDelete_Click(object? sender, EventArgs e)
         {
+            SwitchToRecordsTab();
             if (_selectedRule == null)
             {
                 MessageBox.Show("Сначала выберите запись для удаления.", "Удаление", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -614,6 +637,7 @@ namespace VPNExclude
 
         private void BtnRefresh_Click(object? sender, EventArgs e)
         {
+            SwitchToRecordsTab();
             LoadRulesFromDisk();
             SetStatus("Список обновлён из файла");
             AddLog("Выполнено обновление списка из JSON.");
@@ -621,6 +645,7 @@ namespace VPNExclude
 
         private async void BtnCheckDomain_Click(object? sender, EventArgs e)
         {
+            SwitchToRecordsTab();
             var type = (cmbType.SelectedItem?.ToString() ?? string.Empty).Trim();
             var target = txtTarget.Text.Trim();
 
@@ -1037,6 +1062,7 @@ namespace VPNExclude
 
         private void BtnApplyRoutes_Click(object? sender, EventArgs e)
         {
+            SwitchToRecordsTab();
             if (_selectedRule == null)
             {
                 MessageBox.Show("Сначала выберите запись в таблице.", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Information);

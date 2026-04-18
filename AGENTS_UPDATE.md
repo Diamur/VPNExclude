@@ -48,3 +48,7 @@ Files: App/VPNExclude/StartForm.cs, App/VPNExclude/StartForm.Designer.cs, App/VP
 Files: App/VPNExclude/Form1.Designer.cs, App/VPNExclude/Form1.cs
 - Добавлены кнопки "Загрузить JSON" и "Сохранить JSON" на верхнюю панель справа от текущих действий.
 - Реализованы OpenFileDialog/SaveFileDialog, подтверждение перед импортом, замена набора записей с сохранением в основной JSON и обновлением таблицы/лога/статуса.
+2026-04-18 — Автопереключение на вкладку "Записи" из верхней панели
+Files: App/VPNExclude/Form1.cs
+- Добавлен helper SwitchToRecordsTab() и вызов в обработчиках верхних кнопок (Add/Check/Delete/Refresh/Apply/Load JSON/Save JSON).
+- Кнопки вкладки "Системные маршруты" оставлены без автопереключения.
