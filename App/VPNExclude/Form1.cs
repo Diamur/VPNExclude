@@ -45,6 +45,8 @@ namespace VPNExclude
             btnRefresh.Click += BtnRefresh_Click;
             btnCheckDomain.Click += BtnCheckDomain_Click;
             btnApplyRoutes.Click += BtnApplyRoutes_Click;
+            btnLoadJson.Click += BtnLoadJson_Click;
+            btnSaveJson.Click += BtnSaveJson_Click;
             btnLoadSystemRoutes.Click += BtnLoadSystemRoutes_Click;
             btnCompareRoutes.Click += BtnCompareRoutes_Click;
             btnRefreshSystemRoutes.Click += BtnLoadSystemRoutes_Click;
@@ -378,6 +380,118 @@ namespace VPNExclude
                 SetStatus("Ошибка записи JSON");
                 AddLog($"Ошибка записи JSON: {ex.Message}");
                 return false;
+            }
+        }
+
+        private void BtnSaveJson_Click(object? sender, EventArgs e)
+        {
+            using var saveDialog = new SaveFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                Title = "Экспорт настроек в JSON",
+                FileName = "vpnexclude.json",
+                AddExtension = true,
+                OverwritePrompt = true
+            };
+
+            if (saveDialog.ShowDialog(this) != DialogResult.OK)
+            {
+                SetStatus("Экспорт JSON отменён пользователем");
+                AddLog("Экспорт JSON отменён пользователем.");
+                return;
+            }
+
+            try
+            {
+                var exportJson = JsonSerializer.Serialize(_rules, JsonOptions);
+                File.WriteAllText(saveDialog.FileName, exportJson);
+
+                AddLog($"Экспортировано {_rules.Count} записей в файл {saveDialog.FileName}");
+                SetStatus($"Экспорт JSON завершён: {saveDialog.FileName}");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка экспорта JSON:\n{ex.Message}", "Экспорт JSON", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Ошибка экспорта JSON");
+                AddLog($"Ошибка экспорта JSON: {ex.Message}");
+            }
+        }
+
+        private void BtnLoadJson_Click(object? sender, EventArgs e)
+        {
+            var confirmation = MessageBox.Show(
+                "Выбранный JSON заменит текущие записи приложения. Продолжить?",
+                "Подтверждение импорта JSON",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirmation != DialogResult.Yes)
+            {
+                SetStatus("Импорт JSON отменён пользователем");
+                AddLog("Импорт JSON отменён пользователем.");
+                return;
+            }
+
+            using var openDialog = new OpenFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                Title = "Импорт настроек из JSON",
+                CheckFileExists = true
+            };
+
+            if (openDialog.ShowDialog(this) != DialogResult.OK)
+            {
+                SetStatus("Импорт JSON отменён: файл не выбран");
+                AddLog("Импорт JSON отменён: файл не выбран.");
+                return;
+            }
+
+            try
+            {
+                var importJson = File.ReadAllText(openDialog.FileName);
+                var loadedRules = JsonSerializer.Deserialize<List<ExclusionRule>>(importJson, JsonOptions);
+
+                if (loadedRules == null)
+                {
+                    MessageBox.Show("Выбранный JSON не содержит список записей в ожидаемом формате.", "Импорт JSON", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    SetStatus("Импорт JSON отменён: невалидный формат");
+                    AddLog("Импорт JSON отменён: JSON не содержит валидный список записей.");
+                    return;
+                }
+
+                _rules.Clear();
+                _rules.AddRange(loadedRules);
+                _selectedRule = null;
+                _pendingCheckedAt = null;
+
+                if (!SaveRulesToDisk())
+                {
+                    return;
+                }
+
+                RefreshGridAndSelection();
+                ClearDetailsFields(false);
+
+                if (_systemRoutes.Count > 0)
+                {
+                    PopulateSystemRoutesGrid(includeComparison: false);
+                }
+
+                AddLog($"Импортировано {_rules.Count} записей из файла {openDialog.FileName}");
+                AddLog("Основной JSON приложения обновлён после импорта");
+                SetStatus($"Импорт JSON завершён: {_rules.Count} записей");
+            }
+            catch (JsonException ex)
+            {
+                MessageBox.Show($"Ошибка формата JSON:\n{ex.Message}", "Импорт JSON", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Импорт JSON отменён: ошибка формата");
+                AddLog($"Импорт JSON отменён: ошибка формата JSON ({ex.Message}).");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка импорта JSON:\n{ex.Message}", "Импорт JSON", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Ошибка импорта JSON");
+                AddLog($"Ошибка импорта JSON: {ex.Message}");
             }
         }
 

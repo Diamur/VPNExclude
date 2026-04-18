@@ -40,6 +40,8 @@
             btnDelete = new Button();
             btnRefresh = new Button();
             btnApplyRoutes = new Button();
+            btnLoadJson = new Button();
+            btnSaveJson = new Button();
             mainPanel = new Panel();
             tabControlMain = new TabControl();
             tabRecords = new TabPage();
@@ -125,6 +127,8 @@
             topButtonsLayout.Controls.Add(btnDelete);
             topButtonsLayout.Controls.Add(btnRefresh);
             topButtonsLayout.Controls.Add(btnApplyRoutes);
+            topButtonsLayout.Controls.Add(btnLoadJson);
+            topButtonsLayout.Controls.Add(btnSaveJson);
             topButtonsLayout.Dock = DockStyle.Fill;
             topButtonsLayout.Location = new Point(12, 8);
             topButtonsLayout.Margin = new Padding(0);
@@ -198,6 +202,28 @@
             btnApplyRoutes.TabIndex = 5;
             btnApplyRoutes.Text = "Применить маршруты";
             btnApplyRoutes.UseVisualStyleBackColor = true;
+            // 
+            // btnLoadJson
+            // 
+            btnLoadJson.AutoSize = true;
+            btnLoadJson.Location = new Point(728, 0);
+            btnLoadJson.Margin = new Padding(10, 0, 10, 0);
+            btnLoadJson.Name = "btnLoadJson";
+            btnLoadJson.Size = new Size(111, 32);
+            btnLoadJson.TabIndex = 6;
+            btnLoadJson.Text = "Загрузить JSON";
+            btnLoadJson.UseVisualStyleBackColor = true;
+            // 
+            // btnSaveJson
+            // 
+            btnSaveJson.AutoSize = true;
+            btnSaveJson.Location = new Point(849, 0);
+            btnSaveJson.Margin = new Padding(0);
+            btnSaveJson.Name = "btnSaveJson";
+            btnSaveJson.Size = new Size(113, 32);
+            btnSaveJson.TabIndex = 7;
+            btnSaveJson.Text = "Сохранить JSON";
+            btnSaveJson.UseVisualStyleBackColor = true;
             // 
             // mainPanel
             // 
@@ -731,6 +757,8 @@
         private Button btnDelete;
         private Button btnRefresh;
         private Button btnApplyRoutes;
+        private Button btnLoadJson;
+        private Button btnSaveJson;
         private Panel mainPanel;
         private TabControl tabControlMain;
         private TabPage tabRecords;
