@@ -30,6 +30,8 @@
         {
             DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
             DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle3 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle4 = new DataGridViewCellStyle();
             topPanel = new Panel();
             topButtonsLayout = new FlowLayoutPanel();
             btnAddDomain = new Button();
@@ -106,8 +108,8 @@
             // 
             // topPanel
             // 
-            topPanel.Controls.Add(topButtonsLayout);
             topPanel.BackColor = SystemColors.Control;
+            topPanel.Controls.Add(topButtonsLayout);
             topPanel.Dock = DockStyle.Top;
             topPanel.Location = new Point(0, 0);
             topPanel.Name = "topPanel";
@@ -199,8 +201,8 @@
             // 
             // mainPanel
             // 
-            mainPanel.Controls.Add(tabControlMain);
             mainPanel.BackColor = SystemColors.Control;
+            mainPanel.Controls.Add(tabControlMain);
             mainPanel.Dock = DockStyle.Fill;
             mainPanel.Location = new Point(0, 48);
             mainPanel.Name = "mainPanel";
@@ -225,7 +227,6 @@
             tabRecords.Controls.Add(detailsPanel);
             tabRecords.Location = new Point(4, 24);
             tabRecords.Name = "tabRecords";
-            tabRecords.Padding = new Padding(0);
             tabRecords.Size = new Size(1168, 618);
             tabRecords.TabIndex = 0;
             tabRecords.Text = "Записи";
@@ -246,14 +247,17 @@
             dataGridViewCellStyle1.WrapMode = DataGridViewTriState.True;
             dgvRules.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
             dgvRules.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvRules.ColumnHeadersHeight = 30;
             dgvRules.Columns.AddRange(new DataGridViewColumn[] { colType, colTarget, colIps, colGateway, colComment, colCreatedAt, colUpdatedAt, colCheckedAt, colInSystem });
-            dgvRules.Dock = DockStyle.Fill;
-            dgvRules.EnableHeadersVisualStyles = false;
+            dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle2.BackColor = Color.White;
+            dataGridViewCellStyle2.Font = new Font("Segoe UI", 9F);
+            dataGridViewCellStyle2.ForeColor = SystemColors.ControlText;
             dataGridViewCellStyle2.SelectionBackColor = Color.FromArgb(227, 239, 255);
             dataGridViewCellStyle2.SelectionForeColor = SystemColors.ControlText;
+            dataGridViewCellStyle2.WrapMode = DataGridViewTriState.False;
             dgvRules.DefaultCellStyle = dataGridViewCellStyle2;
+            dgvRules.Dock = DockStyle.Fill;
+            dgvRules.EnableHeadersVisualStyles = false;
             dgvRules.Location = new Point(0, 0);
             dgvRules.MultiSelect = false;
             dgvRules.Name = "dgvRules";
@@ -390,9 +394,9 @@
             // 
             lblTarget.Anchor = AnchorStyles.Left;
             lblTarget.AutoSize = true;
-            lblTarget.Location = new Point(3, 6);
+            lblTarget.Location = new Point(3, 4);
             lblTarget.Name = "lblTarget";
-            lblTarget.Size = new Size(38, 15);
+            lblTarget.Size = new Size(35, 15);
             lblTarget.TabIndex = 0;
             lblTarget.Text = "Цель";
             // 
@@ -401,16 +405,16 @@
             txtTarget.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             txtTarget.Location = new Point(95, 3);
             txtTarget.Name = "txtTarget";
-            txtTarget.Size = new Size(297, 23);
+            txtTarget.Size = new Size(296, 23);
             txtTarget.TabIndex = 1;
             // 
             // lblType
             // 
             lblType.Anchor = AnchorStyles.Left;
             lblType.AutoSize = true;
-            lblType.Location = new Point(398, 6);
+            lblType.Location = new Point(397, 4);
             lblType.Name = "lblType";
-            lblType.Size = new Size(26, 15);
+            lblType.Size = new Size(27, 15);
             lblType.TabIndex = 2;
             lblType.Text = "Тип";
             // 
@@ -420,25 +424,25 @@
             cmbType.DropDownStyle = ComboBoxStyle.DropDownList;
             cmbType.FormattingEnabled = true;
             cmbType.Items.AddRange(new object[] { "IP", "Domain" });
-            cmbType.Location = new Point(490, 3);
+            cmbType.Location = new Point(489, 3);
             cmbType.Name = "cmbType";
-            cmbType.Size = new Size(296, 23);
+            cmbType.Size = new Size(297, 23);
             cmbType.TabIndex = 3;
             // 
             // lblIps
             // 
             lblIps.Anchor = AnchorStyles.Left;
             lblIps.AutoSize = true;
-            lblIps.Location = new Point(3, 30);
+            lblIps.Location = new Point(3, 28);
             lblIps.Name = "lblIps";
-            lblIps.Size = new Size(18, 15);
+            lblIps.Size = new Size(17, 15);
             lblIps.TabIndex = 4;
             lblIps.Text = "IP";
             // 
             // txtIps
             // 
-            detailsLayout.SetColumnSpan(txtIps, 3);
             txtIps.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            detailsLayout.SetColumnSpan(txtIps, 3);
             txtIps.Location = new Point(95, 27);
             txtIps.Name = "txtIps";
             txtIps.Size = new Size(691, 23);
@@ -448,34 +452,34 @@
             // 
             lblGateway.Anchor = AnchorStyles.Left;
             lblGateway.AutoSize = true;
-            lblGateway.Location = new Point(398, 54);
+            lblGateway.Location = new Point(397, 52);
             lblGateway.Name = "lblGateway";
-            lblGateway.Size = new Size(42, 15);
+            lblGateway.Size = new Size(40, 15);
             lblGateway.TabIndex = 6;
             lblGateway.Text = "Шлюз";
             // 
             // txtGateway
             // 
             txtGateway.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            txtGateway.Location = new Point(490, 51);
+            txtGateway.Location = new Point(489, 51);
             txtGateway.Name = "txtGateway";
-            txtGateway.Size = new Size(296, 23);
+            txtGateway.Size = new Size(297, 23);
             txtGateway.TabIndex = 7;
             // 
             // lblComment
             // 
             lblComment.Anchor = AnchorStyles.Left;
             lblComment.AutoSize = true;
-            lblComment.Location = new Point(3, 78);
+            lblComment.Location = new Point(3, 76);
             lblComment.Name = "lblComment";
-            lblComment.Size = new Size(77, 15);
+            lblComment.Size = new Size(84, 15);
             lblComment.TabIndex = 8;
             lblComment.Text = "Комментарий";
             // 
             // txtComment
             // 
-            detailsLayout.SetColumnSpan(txtComment, 3);
             txtComment.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            detailsLayout.SetColumnSpan(txtComment, 3);
             txtComment.Location = new Point(95, 75);
             txtComment.Name = "txtComment";
             txtComment.Size = new Size(691, 23);
@@ -483,7 +487,7 @@
             // 
             // btnSave
             // 
-            btnSave.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+            btnSave.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnSave.Location = new Point(666, 99);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(120, 30);
@@ -522,7 +526,6 @@
             tabSystemRoutes.Controls.Add(panelSystemActions);
             tabSystemRoutes.Location = new Point(4, 24);
             tabSystemRoutes.Name = "tabSystemRoutes";
-            tabSystemRoutes.Padding = new Padding(0);
             tabSystemRoutes.Size = new Size(1168, 618);
             tabSystemRoutes.TabIndex = 1;
             tabSystemRoutes.Text = "Системные маршруты";
@@ -533,8 +536,24 @@
             dgvSystemRoutes.AllowUserToAddRows = false;
             dgvSystemRoutes.AllowUserToDeleteRows = false;
             dgvSystemRoutes.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dataGridViewCellStyle3.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle3.BackColor = SystemColors.Control;
+            dataGridViewCellStyle3.Font = new Font("Segoe UI", 9F);
+            dataGridViewCellStyle3.ForeColor = SystemColors.WindowText;
+            dataGridViewCellStyle3.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle3.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle3.WrapMode = DataGridViewTriState.True;
+            dgvSystemRoutes.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle3;
             dgvSystemRoutes.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvSystemRoutes.Columns.AddRange(new DataGridViewColumn[] { colSystemIp, colSystemGateway, colSystemInterface, colSystemMetric, colSystemActive, colSystemPersistent, colSystemInJson, colSystemTarget, colSystemStatus });
+            dataGridViewCellStyle4.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle4.BackColor = SystemColors.Window;
+            dataGridViewCellStyle4.Font = new Font("Segoe UI", 9F);
+            dataGridViewCellStyle4.ForeColor = SystemColors.ControlText;
+            dataGridViewCellStyle4.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle4.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle4.WrapMode = DataGridViewTriState.False;
+            dgvSystemRoutes.DefaultCellStyle = dataGridViewCellStyle4;
             dgvSystemRoutes.Dock = DockStyle.Fill;
             dgvSystemRoutes.Location = new Point(0, 44);
             dgvSystemRoutes.Name = "dgvSystemRoutes";
