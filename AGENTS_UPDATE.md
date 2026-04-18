@@ -52,3 +52,7 @@ Files: App/VPNExclude/Form1.Designer.cs, App/VPNExclude/Form1.cs
 Files: App/VPNExclude/Form1.cs
 - Добавлен helper SwitchToRecordsTab() и вызов в обработчиках верхних кнопок (Add/Check/Delete/Refresh/Apply/Load JSON/Save JSON).
 - Кнопки вкладки "Системные маршруты" оставлены без автопереключения.
+2026-04-18 — Инфраструктура Install и сценарий Inno Setup
+Files: Install/VPNExclude.Setup.iss, Install/README.md, Install/Docs/INSTALL.md, Install/Prerequisites/README.txt, Install/Output/.gitkeep
+- Добавлена папка Install с подпапками Prerequisites/Output/Docs и документацией по сборке установщика.
+- Подготовлен .iss сценарий с двумя режимами сборки: framework-dependent и self-contained, плюс шаги для WireGuard и .NET Desktop Runtime 8 x64.
