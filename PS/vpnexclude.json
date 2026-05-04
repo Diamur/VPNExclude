@@ -52,19 +52,6 @@
     "LastCheckedAt": "2026-04-16 14:42:33"
   },
   {
-    "Target": "ozon.ru",
-    "Type": "Domain",
-    "Ips": [
-      "185.73.193.68",
-      "185.73.194.82"
-    ],
-    "Gateway": "192.168.1.1",
-    "Comment": "",
-    "CreatedAt": "2026-04-16 14:50:31",
-    "UpdatedAt": null,
-    "LastCheckedAt": "2026-04-16 14:50:44"
-  },
-  {
     "Target": "web.max.ru",
     "Type": "Domain",
     "Ips": [
@@ -162,5 +149,56 @@
     "CreatedAt": "2026-04-18 14:22:58",
     "UpdatedAt": null,
     "LastCheckedAt": null
+  },
+  {
+    "Target": "\u043C\u043E\u0441\u043E\u0431\u043B\u0435\u0438\u0440\u0446.\u0440\u0444",
+    "Type": "Domain",
+    "Ips": [
+      "195.82.140.188"
+    ],
+    "Gateway": "192.168.1.1",
+    "Comment": "",
+    "CreatedAt": "2026-04-23 15:10:54",
+    "UpdatedAt": null,
+    "LastCheckedAt": "2026-04-23 15:10:54"
+  },
+  {
+    "Target": "ozon.ru",
+    "Type": "Domain",
+    "Ips": [
+      "185.73.193.68",
+      "185.73.194.82"
+    ],
+    "Gateway": "192.168.1.1",
+    "Comment": "",
+    "CreatedAt": "2026-04-23 15:11:41",
+    "UpdatedAt": null,
+    "LastCheckedAt": "2026-04-23 15:11:41"
+  },
+  {
+    "Target": "gosuslugi.ru",
+    "Type": "Domain",
+    "Ips": [
+      "213.59.253.7",
+      "213.59.254.7"
+    ],
+    "Gateway": "192.168.1.1",
+    "Comment": "",
+    "CreatedAt": "2026-05-04 14:28:23",
+    "UpdatedAt": null,
+    "LastCheckedAt": "2026-05-04 14:28:23"
+  },
+  {
+    "Target": "www.gosuslugi.ru",
+    "Type": "Domain",
+    "Ips": [
+      "213.59.254.7",
+      "213.59.253.7"
+    ],
+    "Gateway": "192.168.1.1",
+    "Comment": "",
+    "CreatedAt": "2026-05-04 14:28:43",
+    "UpdatedAt": null,
+    "LastCheckedAt": "2026-05-04 14:28:43"
   }
 ]
