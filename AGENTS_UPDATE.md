@@ -61,3 +61,7 @@ Files: App/VPNExclude/Form1.cs
 - Добавлен авто-выбор физического IPv4-интерфейса (Up + IPv4DefaultGateway) с фильтрацией WireGuard/VPN/TAP/virtual.
 - Применение маршрутов переведено на route.exe -p add <ip> mask 255.255.255.255 <gw> metric 1 IF <ifIndex> с предварительным route delete <ip>.
 - Усилена проверка маршрута через route print -4 с контролем gateway + interface index и расширен лог выполнения.
+2026-05-04 — Фикс удаления маршрутов после удаления DefaultGateway
+Files: App/VPNExclude/Form1.cs
+- Исправлен CS0103 в BtnDelete_Click: удалена оставшаяся ссылка на DefaultGateway.
+- Для старых записей без валидного Gateway удаление host-route теперь делает route delete <ip> (без gateway), с сохранением логики ошибок.

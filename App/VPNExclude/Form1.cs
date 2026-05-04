@@ -540,7 +540,7 @@ namespace VPNExclude
             var ruleToDelete = _selectedRule;
             var removedTarget = ruleToDelete.Target;
             var removedType = ruleToDelete.Type;
-            var gateway = string.IsNullOrWhiteSpace(ruleToDelete.Gateway) ? DefaultGateway : ruleToDelete.Gateway.Trim();
+            var gateway = ruleToDelete.Gateway.Trim();
             var ipsToProcess = NormalizeIpv4List(ruleToDelete.Ips);
 
             var confirmation = MessageBox.Show(
@@ -581,10 +581,19 @@ namespace VPNExclude
                     continue;
                 }
 
-                AddLog($"Удаление маршрута: {ip} -> {gateway}");
-                if (TryDeleteHostRoute(ip, gateway, out var alreadyAbsent, out var error))
+                AddLog(string.IsNullOrWhiteSpace(gateway)
+                    ? $"Удаление маршрута: {ip} (без явного Gateway)"
+                    : $"Удаление маршрута: {ip} -> {gateway}");
+
+                var alreadyAbsent = false;
+                string error;
+                var deleteSucceeded = IsValidIpv4(gateway)
+                    ? TryDeleteHostRoute(ip, gateway, out alreadyAbsent, out error)
+                    : TryDeleteRouteByIp(ip, out error);
+
+                if (deleteSucceeded)
                 {
-                    if (alreadyAbsent)
+                    if (IsValidIpv4(gateway) && alreadyAbsent)
                     {
                         alreadyMissingRoutes++;
                         AddLog($"Маршрут уже отсутствует: {ip}");
