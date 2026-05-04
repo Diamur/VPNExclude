@@ -69,3 +69,8 @@ Files: App/VPNExclude/Form1.cs
 Files: App/VPNExclude/Form1.cs
 - RunProcess переведён на чтение stdout/stderr через async-задачи с таймаутом 15000 мс.
 - При превышении таймаута процесс принудительно завершается, возвращается ошибка с командой, чтобы UI не зависал бесконечно.
+2026-05-04 — Добавлены настройки gateway/interface для обхода VPN
+Files: App/VPNExclude/Form1.cs, App/VPNExclude/Form1.Designer.cs, App/VPNExclude/SettingsForm.cs
+- Добавлена кнопка "Настройки" и диалог с полями Gateway, InterfaceAlias, InterfaceIndex, LocalIPv4 + кнопкой "Автоопределить".
+- Настройки сохраняются в vpnexclude.settings.json рядом с vpnexclude.json; при отсутствии файла используется автоопределение.
+- Применение маршрутов теперь учитывает source=manual/auto и пишет расширенный лог источника/интерфейса/шлюза.

@@ -16,6 +16,7 @@ namespace VPNExclude
         private readonly List<ExclusionRule> _rules = new();
         private readonly List<SystemRouteInfo> _systemRoutes = new();
         private readonly string _jsonPath;
+        private readonly string _settingsPath;
         private ExclusionRule? _selectedRule;
         private string? _pendingCheckedAt;
         private bool _isInternalSelectionChange;
@@ -39,12 +40,22 @@ namespace VPNExclude
             [JsonPropertyName("InterfaceDescription")]
             public string Description { get; set; } = string.Empty;
         }
+        private sealed class AppSettings
+        {
+            public string? Gateway { get; set; }
+            public string? InterfaceAlias { get; set; }
+            public int? InterfaceIndex { get; set; }
+            public string? LocalIpv4 { get; set; }
+            public string Source { get; set; } = "auto";
+        }
+        private AppSettings _appSettings = new();
 
         public Form1()
         {
             InitializeComponent();
 
             _jsonPath = ResolveJsonPath();
+            _settingsPath = Path.Combine(Path.GetDirectoryName(_jsonPath) ?? AppContext.BaseDirectory, "vpnexclude.settings.json");
 
             dgvRules.SelectionChanged += DgvRules_SelectionChanged;
             btnAddDomain.Click += BtnAddDomain_Click;
@@ -56,6 +67,7 @@ namespace VPNExclude
             btnApplyRoutes.Click += BtnApplyRoutes_Click;
             btnLoadJson.Click += BtnLoadJson_Click;
             btnSaveJson.Click += BtnSaveJson_Click;
+            btnSettings.Click += BtnSettings_Click;
             btnLoadSystemRoutes.Click += BtnLoadSystemRoutes_Click;
             btnCompareRoutes.Click += BtnCompareRoutes_Click;
             btnRefreshSystemRoutes.Click += BtnLoadSystemRoutes_Click;
@@ -65,7 +77,36 @@ namespace VPNExclude
 
         private void Form1_Load(object? sender, EventArgs e)
         {
+            LoadSettingsFromDisk();
             LoadRulesFromDisk();
+        }
+        private void LoadSettingsFromDisk()
+        {
+            try
+            {
+                if (!File.Exists(_settingsPath))
+                {
+                    _appSettings = new AppSettings { Source = "auto" };
+                    AddLog("Файл настроек не найден. Будет использовано автоопределение интерфейса.");
+                    return;
+                }
+
+                var json = File.ReadAllText(_settingsPath);
+                _appSettings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings { Source = "auto" };
+                AddLog($"Загружены настройки обхода VPN: source={_appSettings.Source}.");
+            }
+            catch (Exception ex)
+            {
+                _appSettings = new AppSettings { Source = "auto" };
+                AddLog($"Ошибка чтения настроек. Используется автоопределение: {ex.Message}");
+            }
+        }
+
+        private void SaveSettingsToDisk()
+        {
+            var json = JsonSerializer.Serialize(_appSettings, JsonOptions);
+            File.WriteAllText(_settingsPath, json);
+            AddLog($"Настройки сохранены: {_settingsPath}");
         }
 
         private static string ResolveJsonPath()
@@ -1107,7 +1148,7 @@ namespace VPNExclude
                 return;
             }
 
-            if (!TryGetPhysicalInterfaceForBypass(out var interfaceInfo, out var detectError))
+            if (!TryResolveInterfaceForRoutes(out var interfaceInfo, out var settingsSource, out var detectError))
             {
                 MessageBox.Show($"Не удалось определить физический интерфейс для обхода VPN.\n{detectError}", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 SetStatus("Применение маршрутов отменено: не найден физический интерфейс");
@@ -1118,6 +1159,7 @@ namespace VPNExclude
             var gateway = interfaceInfo.Gateway;
             _selectedRule.Gateway = gateway;
             txtGateway.Text = gateway;
+            AddLog($"Источник настроек: {settingsSource}");
             AddLog($"Выбран интерфейс обхода VPN: {interfaceInfo.InterfaceAlias} ({interfaceInfo.Description}), IF={interfaceInfo.InterfaceIndex}, IPv4={interfaceInfo.LocalIpv4}, GW={gateway}");
             AddLog($"Применение маршрутов для {_selectedRule.Target} через IF {interfaceInfo.InterfaceIndex}");
 
@@ -1189,6 +1231,72 @@ namespace VPNExclude
             {
                 AddLog($"Не удалось обновить список системных маршрутов после применения: {ex.Message}");
             }
+        }
+
+        private void BtnSettings_Click(object? sender, EventArgs e)
+        {
+            var form = new SettingsForm(
+                _appSettings.Gateway ?? string.Empty,
+                _appSettings.InterfaceAlias ?? string.Empty,
+                _appSettings.InterfaceIndex ?? 0,
+                _appSettings.LocalIpv4 ?? string.Empty);
+
+            form.SetAutoDetectHandler((_, _) =>
+            {
+                if (!TryGetPhysicalInterfaceForBypass(out var detected, out var error))
+                {
+                    MessageBox.Show($"Не удалось автоопределить интерфейс:\n{error}", "Настройки", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                form.SetAutoDetected(detected.Gateway, detected.InterfaceAlias, detected.InterfaceIndex, detected.LocalIpv4);
+            });
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            _appSettings.Gateway = form.Gateway;
+            _appSettings.InterfaceAlias = form.InterfaceAlias;
+            _appSettings.InterfaceIndex = form.InterfaceIndex;
+            _appSettings.LocalIpv4 = form.LocalIpv4;
+            _appSettings.Source = "manual";
+            SaveSettingsToDisk();
+            AddLog($"Настройки обновлены: source=manual, gateway={_appSettings.Gateway}, alias={_appSettings.InterfaceAlias}, ifIndex={_appSettings.InterfaceIndex}, localIPv4={_appSettings.LocalIpv4}");
+        }
+
+        private bool TryResolveInterfaceForRoutes(out PhysicalInterfaceInfo info, out string source, out string error)
+        {
+            info = new PhysicalInterfaceInfo();
+            source = "auto";
+            error = string.Empty;
+
+            if (IsValidIpv4(_appSettings.Gateway ?? string.Empty))
+            {
+                if (!TryGetPhysicalInterfaceForBypass(out var detected, out error))
+                {
+                    return false;
+                }
+
+                detected.Gateway = _appSettings.Gateway!.Trim();
+                info = detected;
+                source = "manual";
+                if (info.InterfaceIndex <= 0)
+                {
+                    error = "Для ручного Gateway не удалось определить InterfaceIndex физического интерфейса.";
+                    return false;
+                }
+                return true;
+            }
+
+            if (!TryGetPhysicalInterfaceForBypass(out info, out error))
+            {
+                return false;
+            }
+
+            source = "auto";
+            return true;
         }
 
         private static bool IsRunningAsAdministrator()
