@@ -1417,7 +1417,7 @@ namespace VPNExclude
             return false;
         }
 
-        private static ProcessResult RunProcess(string fileName, string arguments)
+        private static ProcessResult RunProcess(string fileName, string arguments, int timeoutMs = 15000)
         {
             using var process = new Process();
             process.StartInfo = new ProcessStartInfo
@@ -1431,9 +1431,27 @@ namespace VPNExclude
             };
 
             process.Start();
-            var stdOut = process.StandardOutput.ReadToEnd();
-            var stdErr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var stdOutTask = process.StandardOutput.ReadToEndAsync();
+            var stdErrTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(timeoutMs))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // ignore kill errors for already-terminated process
+                }
+
+                var timeoutError = $"Таймаут выполнения процесса ({timeoutMs} мс): {fileName} {arguments}";
+                return new ProcessResult(-1, string.Empty, timeoutError);
+            }
+
+            Task.WaitAll(new Task[] { stdOutTask, stdErrTask }, 2000);
+            var stdOut = stdOutTask.IsCompletedSuccessfully ? stdOutTask.Result : string.Empty;
+            var stdErr = stdErrTask.IsCompletedSuccessfully ? stdErrTask.Result : string.Empty;
 
             return new ProcessResult(process.ExitCode, stdOut, stdErr);
         }
