@@ -42,6 +42,7 @@
             btnApplyRoutes = new Button();
             btnLoadJson = new Button();
             btnSaveJson = new Button();
+            btnSettings = new Button();
             mainPanel = new Panel();
             tabControlMain = new TabControl();
             tabRecords = new TabPage();
@@ -129,6 +130,7 @@
             topButtonsLayout.Controls.Add(btnApplyRoutes);
             topButtonsLayout.Controls.Add(btnLoadJson);
             topButtonsLayout.Controls.Add(btnSaveJson);
+            topButtonsLayout.Controls.Add(btnSettings);
             topButtonsLayout.Dock = DockStyle.Fill;
             topButtonsLayout.Location = new Point(12, 8);
             topButtonsLayout.Margin = new Padding(0);
@@ -224,6 +226,17 @@
             btnSaveJson.TabIndex = 7;
             btnSaveJson.Text = "Сохранить JSON";
             btnSaveJson.UseVisualStyleBackColor = true;
+            // 
+            // btnSettings
+            // 
+            btnSettings.AutoSize = true;
+            btnSettings.Location = new Point(970, 0);
+            btnSettings.Margin = new Padding(10, 0, 0, 0);
+            btnSettings.Name = "btnSettings";
+            btnSettings.Size = new Size(94, 32);
+            btnSettings.TabIndex = 8;
+            btnSettings.Text = "Настройки";
+            btnSettings.UseVisualStyleBackColor = true;
             // 
             // mainPanel
             // 
@@ -759,6 +772,7 @@
         private Button btnApplyRoutes;
         private Button btnLoadJson;
         private Button btnSaveJson;
+        private Button btnSettings;
         private Panel mainPanel;
         private TabControl tabControlMain;
         private TabPage tabRecords;

@@ -10,13 +10,13 @@ namespace VPNExclude
 {
     public partial class Form1 : Form
     {
-        private const string DefaultGateway = "192.168.1.1";
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
         private static readonly JsonSerializerOptions RouteJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         private readonly List<ExclusionRule> _rules = new();
         private readonly List<SystemRouteInfo> _systemRoutes = new();
         private readonly string _jsonPath;
+        private readonly string _settingsPath;
         private ExclusionRule? _selectedRule;
         private string? _pendingCheckedAt;
         private bool _isInternalSelectionChange;
@@ -30,12 +30,32 @@ namespace VPNExclude
             public bool Active { get; set; }
             public bool Persistent { get; set; }
         }
+        private sealed class PhysicalInterfaceInfo
+        {
+            public int InterfaceIndex { get; set; }
+            public string InterfaceAlias { get; set; } = string.Empty;
+            public string Gateway { get; set; } = string.Empty;
+            [JsonPropertyName("LocalIPv4")]
+            public string LocalIpv4 { get; set; } = string.Empty;
+            [JsonPropertyName("InterfaceDescription")]
+            public string Description { get; set; } = string.Empty;
+        }
+        private sealed class AppSettings
+        {
+            public string? Gateway { get; set; }
+            public string? InterfaceAlias { get; set; }
+            public int? InterfaceIndex { get; set; }
+            public string? LocalIpv4 { get; set; }
+            public string Source { get; set; } = "auto";
+        }
+        private AppSettings _appSettings = new();
 
         public Form1()
         {
             InitializeComponent();
 
             _jsonPath = ResolveJsonPath();
+            _settingsPath = Path.Combine(Path.GetDirectoryName(_jsonPath) ?? AppContext.BaseDirectory, "vpnexclude.settings.json");
 
             dgvRules.SelectionChanged += DgvRules_SelectionChanged;
             btnAddDomain.Click += BtnAddDomain_Click;
@@ -47,6 +67,7 @@ namespace VPNExclude
             btnApplyRoutes.Click += BtnApplyRoutes_Click;
             btnLoadJson.Click += BtnLoadJson_Click;
             btnSaveJson.Click += BtnSaveJson_Click;
+            btnSettings.Click += BtnSettings_Click;
             btnLoadSystemRoutes.Click += BtnLoadSystemRoutes_Click;
             btnCompareRoutes.Click += BtnCompareRoutes_Click;
             btnRefreshSystemRoutes.Click += BtnLoadSystemRoutes_Click;
@@ -56,7 +77,36 @@ namespace VPNExclude
 
         private void Form1_Load(object? sender, EventArgs e)
         {
+            LoadSettingsFromDisk();
             LoadRulesFromDisk();
+        }
+        private void LoadSettingsFromDisk()
+        {
+            try
+            {
+                if (!File.Exists(_settingsPath))
+                {
+                    _appSettings = new AppSettings { Source = "auto" };
+                    AddLog("Файл настроек не найден. Будет использовано автоопределение интерфейса.");
+                    return;
+                }
+
+                var json = File.ReadAllText(_settingsPath);
+                _appSettings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings { Source = "auto" };
+                AddLog($"Загружены настройки обхода VPN: source={_appSettings.Source}.");
+            }
+            catch (Exception ex)
+            {
+                _appSettings = new AppSettings { Source = "auto" };
+                AddLog($"Ошибка чтения настроек. Используется автоопределение: {ex.Message}");
+            }
+        }
+
+        private void SaveSettingsToDisk()
+        {
+            var json = JsonSerializer.Serialize(_appSettings, JsonOptions);
+            File.WriteAllText(_settingsPath, json);
+            AddLog($"Настройки сохранены: {_settingsPath}");
         }
 
         private static string ResolveJsonPath()
@@ -331,7 +381,7 @@ namespace VPNExclude
             }
 
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var gateway = string.IsNullOrWhiteSpace(txtGateway.Text) ? DefaultGateway : txtGateway.Text.Trim();
+            var gateway = txtGateway.Text.Trim();
 
             if (_selectedRule == null)
             {
@@ -531,7 +581,7 @@ namespace VPNExclude
             var ruleToDelete = _selectedRule;
             var removedTarget = ruleToDelete.Target;
             var removedType = ruleToDelete.Type;
-            var gateway = string.IsNullOrWhiteSpace(ruleToDelete.Gateway) ? DefaultGateway : ruleToDelete.Gateway.Trim();
+            var gateway = ruleToDelete.Gateway.Trim();
             var ipsToProcess = NormalizeIpv4List(ruleToDelete.Ips);
 
             var confirmation = MessageBox.Show(
@@ -572,10 +622,19 @@ namespace VPNExclude
                     continue;
                 }
 
-                AddLog($"Удаление маршрута: {ip} -> {gateway}");
-                if (TryDeleteHostRoute(ip, gateway, out var alreadyAbsent, out var error))
+                AddLog(string.IsNullOrWhiteSpace(gateway)
+                    ? $"Удаление маршрута: {ip} (без явного Gateway)"
+                    : $"Удаление маршрута: {ip} -> {gateway}");
+
+                var alreadyAbsent = false;
+                string error;
+                var deleteSucceeded = IsValidIpv4(gateway)
+                    ? TryDeleteHostRoute(ip, gateway, out alreadyAbsent, out error)
+                    : TryDeleteRouteByIp(ip, out error);
+
+                if (deleteSucceeded)
                 {
-                    if (alreadyAbsent)
+                    if (IsValidIpv4(gateway) && alreadyAbsent)
                     {
                         alreadyMissingRoutes++;
                         AddLog($"Маршрут уже отсутствует: {ip}");
@@ -1071,15 +1130,6 @@ namespace VPNExclude
                 return;
             }
 
-            if (!IsValidIpv4(_selectedRule.Gateway))
-            {
-                MessageBox.Show("Укажите корректный IPv4 шлюз в поле Gateway.", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                SetStatus("Применение маршрутов отменено: невалидный шлюз");
-                AddLog($"Применение маршрутов отменено: невалидный шлюз '{_selectedRule.Gateway}'.");
-                return;
-            }
-
-            var gateway = _selectedRule.Gateway.Trim();
             var normalizedIps = NormalizeIpv4List(_selectedRule.Ips);
             if (normalizedIps.Count == 0)
             {
@@ -1098,7 +1148,20 @@ namespace VPNExclude
                 return;
             }
 
-            AddLog($"Применение маршрутов для {_selectedRule.Target} через шлюз {gateway}");
+            if (!TryResolveInterfaceForRoutes(out var interfaceInfo, out var settingsSource, out var detectError))
+            {
+                MessageBox.Show($"Не удалось определить физический интерфейс для обхода VPN.\n{detectError}", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Применение маршрутов отменено: не найден физический интерфейс");
+                AddLog($"Применение маршрутов отменено: {detectError}");
+                return;
+            }
+
+            var gateway = interfaceInfo.Gateway;
+            _selectedRule.Gateway = gateway;
+            txtGateway.Text = gateway;
+            AddLog($"Источник настроек: {settingsSource}");
+            AddLog($"Выбран интерфейс обхода VPN: {interfaceInfo.InterfaceAlias} ({interfaceInfo.Description}), IF={interfaceInfo.InterfaceIndex}, IPv4={interfaceInfo.LocalIpv4}, GW={gateway}");
+            AddLog($"Применение маршрутов для {_selectedRule.Target} через IF {interfaceInfo.InterfaceIndex}");
 
             var added = 0;
             var existed = 0;
@@ -1108,18 +1171,36 @@ namespace VPNExclude
             {
                 try
                 {
-                    if (RouteExists(ip, gateway))
+                    var deleted = TryDeleteRouteByIp(ip, out var deleteError);
+                    if (!deleted)
                     {
-                        existed++;
-                        AddLog($"Маршрут уже существует: {ip} -> {gateway}");
+                        failed++;
+                        AddLog($"Ошибка удаления старого маршрута {ip}: {deleteError}");
                         continue;
                     }
 
-                    var addResult = RunProcess("route.exe", $"-p add {ip} mask 255.255.255.255 {gateway}");
+                    var addArgs = $"-p add {ip} mask 255.255.255.255 {gateway} metric 1 IF {interfaceInfo.InterfaceIndex}";
+                    AddLog($"Команда: route.exe {addArgs}");
+                    var addResult = RunProcess("route.exe", addArgs);
                     if (addResult.ExitCode == 0)
                     {
+                        if (RouteExists(ip, gateway, interfaceInfo.InterfaceIndex))
+                        {
+                            added++;
+                            AddLog($"Маршрут добавлен: {ip} -> {gateway} IF {interfaceInfo.InterfaceIndex}");
+                            continue;
+                        }
+
+                        failed++;
+                        AddLog($"Маршрут {ip} добавлен, но проверка IF не пройдена.");
+                        continue;
+                    }
+
+                    if (RouteExists(ip, gateway, interfaceInfo.InterfaceIndex))
+                    {
                         added++;
-                        AddLog($"Маршрут добавлен: {ip} -> {gateway}");
+                        existed++;
+                        AddLog($"Маршрут уже присутствует в нужном виде: {ip} -> {gateway} IF {interfaceInfo.InterfaceIndex}");
                         continue;
                     }
 
@@ -1150,6 +1231,72 @@ namespace VPNExclude
             {
                 AddLog($"Не удалось обновить список системных маршрутов после применения: {ex.Message}");
             }
+        }
+
+        private void BtnSettings_Click(object? sender, EventArgs e)
+        {
+            var form = new SettingsForm(
+                _appSettings.Gateway ?? string.Empty,
+                _appSettings.InterfaceAlias ?? string.Empty,
+                _appSettings.InterfaceIndex ?? 0,
+                _appSettings.LocalIpv4 ?? string.Empty);
+
+            form.SetAutoDetectHandler((_, _) =>
+            {
+                if (!TryGetPhysicalInterfaceForBypass(out var detected, out var error))
+                {
+                    MessageBox.Show($"Не удалось автоопределить интерфейс:\n{error}", "Настройки", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                form.SetAutoDetected(detected.Gateway, detected.InterfaceAlias, detected.InterfaceIndex, detected.LocalIpv4);
+            });
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            _appSettings.Gateway = form.Gateway;
+            _appSettings.InterfaceAlias = form.InterfaceAlias;
+            _appSettings.InterfaceIndex = form.InterfaceIndex;
+            _appSettings.LocalIpv4 = form.LocalIpv4;
+            _appSettings.Source = "manual";
+            SaveSettingsToDisk();
+            AddLog($"Настройки обновлены: source=manual, gateway={_appSettings.Gateway}, alias={_appSettings.InterfaceAlias}, ifIndex={_appSettings.InterfaceIndex}, localIPv4={_appSettings.LocalIpv4}");
+        }
+
+        private bool TryResolveInterfaceForRoutes(out PhysicalInterfaceInfo info, out string source, out string error)
+        {
+            info = new PhysicalInterfaceInfo();
+            source = "auto";
+            error = string.Empty;
+
+            if (IsValidIpv4(_appSettings.Gateway ?? string.Empty))
+            {
+                if (!TryGetPhysicalInterfaceForBypass(out var detected, out error))
+                {
+                    return false;
+                }
+
+                detected.Gateway = _appSettings.Gateway!.Trim();
+                info = detected;
+                source = "manual";
+                if (info.InterfaceIndex <= 0)
+                {
+                    error = "Для ручного Gateway не удалось определить InterfaceIndex физического интерфейса.";
+                    return false;
+                }
+                return true;
+            }
+
+            if (!TryGetPhysicalInterfaceForBypass(out info, out error))
+            {
+                return false;
+            }
+
+            source = "auto";
+            return true;
         }
 
         private static bool IsRunningAsAdministrator()
@@ -1221,17 +1368,98 @@ namespace VPNExclude
             return normalized.Count == 0 ? "(пусто)" : string.Join(", ", normalized);
         }
 
-        private bool RouteExists(string ip, string gateway)
+        private bool RouteExists(string ip, string gateway, int interfaceIndex)
         {
-            var printResult = RunProcess("route.exe", $"print {ip}");
+            var printResult = RunProcess("route.exe", "print -4");
             if (printResult.ExitCode != 0)
             {
                 return false;
             }
 
             var normalizedOutput = printResult.StdOut.Replace("\r", string.Empty);
-            var pattern = $@"^\s*{Regex.Escape(ip)}\s+255\.255\.255\.255\s+{Regex.Escape(gateway)}\s+";
+            var pattern = $@"^\s*{Regex.Escape(ip)}\s+255\.255\.255\.255\s+{Regex.Escape(gateway)}\s+[0-9\.]+\s+{interfaceIndex}\s+";
             return Regex.IsMatch(normalizedOutput, pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+
+        private bool TryDeleteRouteByIp(string ip, out string error)
+        {
+            error = string.Empty;
+            var deleteResult = RunProcess("route.exe", $"delete {ip}");
+            if (deleteResult.ExitCode == 0)
+            {
+                AddLog($"Старый маршрут удалён (если существовал): {ip}");
+                return true;
+            }
+
+            var processError = GetProcessError(deleteResult);
+            if (IsRouteAlreadyAbsent(processError))
+            {
+                AddLog($"Старый маршрут для {ip} не найден, продолжаем.");
+                return true;
+            }
+
+            error = processError;
+            return false;
+        }
+
+        private bool TryGetPhysicalInterfaceForBypass(out PhysicalInterfaceInfo info, out string error)
+        {
+            info = new PhysicalInterfaceInfo();
+            error = string.Empty;
+            const string query = "$cfg = Get-NetIPConfiguration | Where-Object { $_.NetAdapter.Status -eq 'Up' -and $_.IPv4DefaultGateway -ne $null -and $_.IPv4Address -ne $null } | Select-Object InterfaceAlias,InterfaceIndex,IPv4DefaultGateway,IPv4Address,NetProfile,NetAdapter; $cfg | ForEach-Object { [PSCustomObject]@{ InterfaceAlias = $_.InterfaceAlias; InterfaceIndex = $_.InterfaceIndex; Gateway = $_.IPv4DefaultGateway.NextHop; LocalIPv4 = ($_.IPv4Address | Select-Object -First 1 -ExpandProperty IPAddress); InterfaceDescription = $_.NetAdapter.InterfaceDescription; InterfaceType = $_.NetAdapter.InterfaceType; Name = $_.NetAdapter.Name } } | ConvertTo-Json -Depth 4";
+            var result = RunPowerShellQuery(query);
+            if (result.ExitCode != 0)
+            {
+                error = $"Get-NetIPConfiguration завершился с ошибкой: {GetProcessError(result)}";
+                return false;
+            }
+
+            var items = ParsePhysicalInterfaces(result.StdOut);
+            var filtered = items
+                .Where(i => IsPreferredPhysicalInterface(i.InterfaceAlias, i.Description))
+                .OrderByDescending(i => GetInterfacePriority(i.InterfaceAlias, i.Description))
+                .ToList();
+
+            var selected = filtered.FirstOrDefault();
+            if (selected == null)
+            {
+                error = "Не найден подходящий физический интерфейс с IPv4 шлюзом.";
+                return false;
+            }
+
+            info = selected;
+            return true;
+        }
+
+        private static List<PhysicalInterfaceInfo> ParsePhysicalInterfaces(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new List<PhysicalInterfaceInfo>();
+            }
+
+            var normalized = json.TrimStart();
+            return normalized.StartsWith("[", StringComparison.Ordinal)
+                ? JsonSerializer.Deserialize<List<PhysicalInterfaceInfo>>(json, RouteJsonOptions) ?? new List<PhysicalInterfaceInfo>()
+                : new List<PhysicalInterfaceInfo> { JsonSerializer.Deserialize<PhysicalInterfaceInfo>(json, RouteJsonOptions) ?? new PhysicalInterfaceInfo() };
+        }
+
+        private static bool IsPreferredPhysicalInterface(string alias, string description)
+        {
+            var text = $"{alias} {description}".ToLowerInvariant();
+            var blockedTokens = new[] { "wireguard", "wg", "tap", "vpn", "tun", "virtual", "hyper-v", "loopback", "wintun" };
+            return !blockedTokens.Any(text.Contains);
+        }
+
+        private static int GetInterfacePriority(string alias, string description)
+        {
+            var text = $"{alias} {description}".ToLowerInvariant();
+            if (text.Contains("ethernet", StringComparison.Ordinal) || text.Contains("wi-fi", StringComparison.Ordinal) || text.Contains("wifi", StringComparison.Ordinal))
+            {
+                return 2;
+            }
+
+            return 1;
         }
 
         private static ProcessResult RunPowerShellQuery(string query)
@@ -1297,7 +1525,7 @@ namespace VPNExclude
             return false;
         }
 
-        private static ProcessResult RunProcess(string fileName, string arguments)
+        private static ProcessResult RunProcess(string fileName, string arguments, int timeoutMs = 15000)
         {
             using var process = new Process();
             process.StartInfo = new ProcessStartInfo
@@ -1311,9 +1539,27 @@ namespace VPNExclude
             };
 
             process.Start();
-            var stdOut = process.StandardOutput.ReadToEnd();
-            var stdErr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var stdOutTask = process.StandardOutput.ReadToEndAsync();
+            var stdErrTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(timeoutMs))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // ignore kill errors for already-terminated process
+                }
+
+                var timeoutError = $"Таймаут выполнения процесса ({timeoutMs} мс): {fileName} {arguments}";
+                return new ProcessResult(-1, string.Empty, timeoutError);
+            }
+
+            Task.WaitAll(new Task[] { stdOutTask, stdErrTask }, 2000);
+            var stdOut = stdOutTask.IsCompletedSuccessfully ? stdOutTask.Result : string.Empty;
+            var stdErr = stdErrTask.IsCompletedSuccessfully ? stdErrTask.Result : string.Empty;
 
             return new ProcessResult(process.ExitCode, stdOut, stdErr);
         }
