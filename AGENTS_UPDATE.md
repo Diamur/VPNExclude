@@ -56,3 +56,8 @@ Files: App/VPNExclude/Form1.cs
 Files: Install/VPNExclude.Setup.iss, Install/README.md, Install/Docs/INSTALL.md, Install/Prerequisites/README.txt, Install/Output/.gitkeep
 - Добавлена папка Install с подпапками Prerequisites/Output/Docs и документацией по сборке установщика.
 - Подготовлен .iss сценарий с двумя режимами сборки: framework-dependent и self-contained, плюс шаги для WireGuard и .NET Desktop Runtime 8 x64.
+2026-05-04 — Привязка host-route к физическому IF для full-tunnel WG
+Files: App/VPNExclude/Form1.cs
+- Добавлен авто-выбор физического IPv4-интерфейса (Up + IPv4DefaultGateway) с фильтрацией WireGuard/VPN/TAP/virtual.
+- Применение маршрутов переведено на route.exe -p add <ip> mask 255.255.255.255 <gw> metric 1 IF <ifIndex> с предварительным route delete <ip>.
+- Усилена проверка маршрута через route print -4 с контролем gateway + interface index и расширен лог выполнения.

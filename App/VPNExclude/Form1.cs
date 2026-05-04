@@ -10,7 +10,6 @@ namespace VPNExclude
 {
     public partial class Form1 : Form
     {
-        private const string DefaultGateway = "192.168.1.1";
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
         private static readonly JsonSerializerOptions RouteJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -29,6 +28,16 @@ namespace VPNExclude
             public string Metric { get; set; } = string.Empty;
             public bool Active { get; set; }
             public bool Persistent { get; set; }
+        }
+        private sealed class PhysicalInterfaceInfo
+        {
+            public int InterfaceIndex { get; set; }
+            public string InterfaceAlias { get; set; } = string.Empty;
+            public string Gateway { get; set; } = string.Empty;
+            [JsonPropertyName("LocalIPv4")]
+            public string LocalIpv4 { get; set; } = string.Empty;
+            [JsonPropertyName("InterfaceDescription")]
+            public string Description { get; set; } = string.Empty;
         }
 
         public Form1()
@@ -331,7 +340,7 @@ namespace VPNExclude
             }
 
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var gateway = string.IsNullOrWhiteSpace(txtGateway.Text) ? DefaultGateway : txtGateway.Text.Trim();
+            var gateway = txtGateway.Text.Trim();
 
             if (_selectedRule == null)
             {
@@ -1071,15 +1080,6 @@ namespace VPNExclude
                 return;
             }
 
-            if (!IsValidIpv4(_selectedRule.Gateway))
-            {
-                MessageBox.Show("Укажите корректный IPv4 шлюз в поле Gateway.", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                SetStatus("Применение маршрутов отменено: невалидный шлюз");
-                AddLog($"Применение маршрутов отменено: невалидный шлюз '{_selectedRule.Gateway}'.");
-                return;
-            }
-
-            var gateway = _selectedRule.Gateway.Trim();
             var normalizedIps = NormalizeIpv4List(_selectedRule.Ips);
             if (normalizedIps.Count == 0)
             {
@@ -1098,7 +1098,19 @@ namespace VPNExclude
                 return;
             }
 
-            AddLog($"Применение маршрутов для {_selectedRule.Target} через шлюз {gateway}");
+            if (!TryGetPhysicalInterfaceForBypass(out var interfaceInfo, out var detectError))
+            {
+                MessageBox.Show($"Не удалось определить физический интерфейс для обхода VPN.\n{detectError}", "Применить маршруты", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                SetStatus("Применение маршрутов отменено: не найден физический интерфейс");
+                AddLog($"Применение маршрутов отменено: {detectError}");
+                return;
+            }
+
+            var gateway = interfaceInfo.Gateway;
+            _selectedRule.Gateway = gateway;
+            txtGateway.Text = gateway;
+            AddLog($"Выбран интерфейс обхода VPN: {interfaceInfo.InterfaceAlias} ({interfaceInfo.Description}), IF={interfaceInfo.InterfaceIndex}, IPv4={interfaceInfo.LocalIpv4}, GW={gateway}");
+            AddLog($"Применение маршрутов для {_selectedRule.Target} через IF {interfaceInfo.InterfaceIndex}");
 
             var added = 0;
             var existed = 0;
@@ -1108,18 +1120,36 @@ namespace VPNExclude
             {
                 try
                 {
-                    if (RouteExists(ip, gateway))
+                    var deleted = TryDeleteRouteByIp(ip, out var deleteError);
+                    if (!deleted)
                     {
-                        existed++;
-                        AddLog($"Маршрут уже существует: {ip} -> {gateway}");
+                        failed++;
+                        AddLog($"Ошибка удаления старого маршрута {ip}: {deleteError}");
                         continue;
                     }
 
-                    var addResult = RunProcess("route.exe", $"-p add {ip} mask 255.255.255.255 {gateway}");
+                    var addArgs = $"-p add {ip} mask 255.255.255.255 {gateway} metric 1 IF {interfaceInfo.InterfaceIndex}";
+                    AddLog($"Команда: route.exe {addArgs}");
+                    var addResult = RunProcess("route.exe", addArgs);
                     if (addResult.ExitCode == 0)
                     {
+                        if (RouteExists(ip, gateway, interfaceInfo.InterfaceIndex))
+                        {
+                            added++;
+                            AddLog($"Маршрут добавлен: {ip} -> {gateway} IF {interfaceInfo.InterfaceIndex}");
+                            continue;
+                        }
+
+                        failed++;
+                        AddLog($"Маршрут {ip} добавлен, но проверка IF не пройдена.");
+                        continue;
+                    }
+
+                    if (RouteExists(ip, gateway, interfaceInfo.InterfaceIndex))
+                    {
                         added++;
-                        AddLog($"Маршрут добавлен: {ip} -> {gateway}");
+                        existed++;
+                        AddLog($"Маршрут уже присутствует в нужном виде: {ip} -> {gateway} IF {interfaceInfo.InterfaceIndex}");
                         continue;
                     }
 
@@ -1221,17 +1251,98 @@ namespace VPNExclude
             return normalized.Count == 0 ? "(пусто)" : string.Join(", ", normalized);
         }
 
-        private bool RouteExists(string ip, string gateway)
+        private bool RouteExists(string ip, string gateway, int interfaceIndex)
         {
-            var printResult = RunProcess("route.exe", $"print {ip}");
+            var printResult = RunProcess("route.exe", "print -4");
             if (printResult.ExitCode != 0)
             {
                 return false;
             }
 
             var normalizedOutput = printResult.StdOut.Replace("\r", string.Empty);
-            var pattern = $@"^\s*{Regex.Escape(ip)}\s+255\.255\.255\.255\s+{Regex.Escape(gateway)}\s+";
+            var pattern = $@"^\s*{Regex.Escape(ip)}\s+255\.255\.255\.255\s+{Regex.Escape(gateway)}\s+[0-9\.]+\s+{interfaceIndex}\s+";
             return Regex.IsMatch(normalizedOutput, pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+
+        private bool TryDeleteRouteByIp(string ip, out string error)
+        {
+            error = string.Empty;
+            var deleteResult = RunProcess("route.exe", $"delete {ip}");
+            if (deleteResult.ExitCode == 0)
+            {
+                AddLog($"Старый маршрут удалён (если существовал): {ip}");
+                return true;
+            }
+
+            var processError = GetProcessError(deleteResult);
+            if (IsRouteAlreadyAbsent(processError))
+            {
+                AddLog($"Старый маршрут для {ip} не найден, продолжаем.");
+                return true;
+            }
+
+            error = processError;
+            return false;
+        }
+
+        private bool TryGetPhysicalInterfaceForBypass(out PhysicalInterfaceInfo info, out string error)
+        {
+            info = new PhysicalInterfaceInfo();
+            error = string.Empty;
+            const string query = "$cfg = Get-NetIPConfiguration | Where-Object { $_.NetAdapter.Status -eq 'Up' -and $_.IPv4DefaultGateway -ne $null -and $_.IPv4Address -ne $null } | Select-Object InterfaceAlias,InterfaceIndex,IPv4DefaultGateway,IPv4Address,NetProfile,NetAdapter; $cfg | ForEach-Object { [PSCustomObject]@{ InterfaceAlias = $_.InterfaceAlias; InterfaceIndex = $_.InterfaceIndex; Gateway = $_.IPv4DefaultGateway.NextHop; LocalIPv4 = ($_.IPv4Address | Select-Object -First 1 -ExpandProperty IPAddress); InterfaceDescription = $_.NetAdapter.InterfaceDescription; InterfaceType = $_.NetAdapter.InterfaceType; Name = $_.NetAdapter.Name } } | ConvertTo-Json -Depth 4";
+            var result = RunPowerShellQuery(query);
+            if (result.ExitCode != 0)
+            {
+                error = $"Get-NetIPConfiguration завершился с ошибкой: {GetProcessError(result)}";
+                return false;
+            }
+
+            var items = ParsePhysicalInterfaces(result.StdOut);
+            var filtered = items
+                .Where(i => IsPreferredPhysicalInterface(i.InterfaceAlias, i.Description))
+                .OrderByDescending(i => GetInterfacePriority(i.InterfaceAlias, i.Description))
+                .ToList();
+
+            var selected = filtered.FirstOrDefault();
+            if (selected == null)
+            {
+                error = "Не найден подходящий физический интерфейс с IPv4 шлюзом.";
+                return false;
+            }
+
+            info = selected;
+            return true;
+        }
+
+        private static List<PhysicalInterfaceInfo> ParsePhysicalInterfaces(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return new List<PhysicalInterfaceInfo>();
+            }
+
+            var normalized = json.TrimStart();
+            return normalized.StartsWith("[", StringComparison.Ordinal)
+                ? JsonSerializer.Deserialize<List<PhysicalInterfaceInfo>>(json, RouteJsonOptions) ?? new List<PhysicalInterfaceInfo>()
+                : new List<PhysicalInterfaceInfo> { JsonSerializer.Deserialize<PhysicalInterfaceInfo>(json, RouteJsonOptions) ?? new PhysicalInterfaceInfo() };
+        }
+
+        private static bool IsPreferredPhysicalInterface(string alias, string description)
+        {
+            var text = $"{alias} {description}".ToLowerInvariant();
+            var blockedTokens = new[] { "wireguard", "wg", "tap", "vpn", "tun", "virtual", "hyper-v", "loopback", "wintun" };
+            return !blockedTokens.Any(text.Contains);
+        }
+
+        private static int GetInterfacePriority(string alias, string description)
+        {
+            var text = $"{alias} {description}".ToLowerInvariant();
+            if (text.Contains("ethernet", StringComparison.Ordinal) || text.Contains("wi-fi", StringComparison.Ordinal) || text.Contains("wifi", StringComparison.Ordinal))
+            {
+                return 2;
+            }
+
+            return 1;
         }
 
         private static ProcessResult RunPowerShellQuery(string query)
